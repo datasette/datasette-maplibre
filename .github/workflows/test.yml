@@ -8,7 +8,6 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
-        datasette-version: ["<1.0", ">=1.0a37"]
     steps:
     - uses: actions/checkout@v7
     - name: Set up Python ${{ matrix.python-version }}
@@ -26,7 +25,6 @@ jobs:
       run: |
         pip install -e . --group dev
         playwright install chromium
-        pip install "datasette${{ matrix.datasette-version }}"
     - name: Run tests
       run: |
         pytest

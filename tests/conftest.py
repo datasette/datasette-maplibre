@@ -87,6 +87,23 @@ def ds_db_path(tmp_path_factory):
                 ),
             ),
         )
+        # Two shapes that cross the antimeridian, as Fiji does
+        db.execute("create table dateline (id integer primary key, geometry text)")
+        for south in (-18, -16):
+            db.execute(
+                "insert into dateline (geometry) values (?)",
+                (
+                    json.dumps(
+                        {
+                            "type": "MultiPolygon",
+                            "coordinates": [
+                                json.loads(square(179, south, 1))["coordinates"],
+                                json.loads(square(-180, south, 1))["coordinates"],
+                            ],
+                        }
+                    ),
+                ),
+            )
         db.execute(
             "create table mixed (id integer primary key, name text, latitude float, "
             "longitude float, boundary text, popup text)"
@@ -113,8 +130,8 @@ def ds_db_path(tmp_path_factory):
 
 @pytest.fixture(scope="session")
 def ds_server(ds_db_path, tmp_path_factory):
-    metadata_path = tmp_path_factory.mktemp("metadata") / "metadata.json"
-    metadata_path.write_text(
+    config_path = tmp_path_factory.mktemp("config") / "datasette.json"
+    config_path.write_text(
         json.dumps(
             {
                 "plugins": {
@@ -146,8 +163,8 @@ def ds_server(ds_db_path, tmp_path_factory):
             "--setting",
             "max_returned_rows",
             "10",
-            "--metadata",
-            str(metadata_path),
+            "--config",
+            str(config_path),
             str(ds_db_path),
         ],
         stdout=PIPE,

@@ -6,7 +6,7 @@
 
 const config = (window.datasette && window.datasette.maplibre) || null;
 
-// Datasette 1.0 row pages are a <dl class="row-fields">, not a table
+// Table and query pages are a table, row pages are a <dl class="row-fields">
 const DATA_SELECTOR = "table.rows-and-columns, dl.row-fields";
 const CELL_SELECTOR = "table.rows-and-columns td, dl.row-fields .row-field-value";
 const COLUMN_SELECTOR =
@@ -236,21 +236,40 @@ function eachPosition(coordinates, callback) {
 }
 
 function extendBounds(bounds, geometry) {
-  // bounds is [west, south, east, north], or null
+  // bounds is [west, south, east, north, shiftedWest, shiftedEast], or null.
+  // The last two are the same west and east measured from 0 to 360 instead
+  // of -180 to 180, for shapes that cross the antimeridian: see tightBounds()
   eachPosition(geometry.coordinates, ([lng, lat]) => {
+    const shifted = lng < 0 ? lng + 360 : lng;
     if (!bounds) {
-      bounds = [lng, lat, lng, lat];
+      bounds = [lng, lat, lng, lat, shifted, shifted];
     } else {
       bounds[0] = Math.min(bounds[0], lng);
       bounds[1] = Math.min(bounds[1], lat);
       bounds[2] = Math.max(bounds[2], lng);
       bounds[3] = Math.max(bounds[3], lat);
+      bounds[4] = Math.min(bounds[4], shifted);
+      bounds[5] = Math.max(bounds[5], shifted);
     }
   });
   return bounds;
 }
 
+function crossesAntimeridian(bounds) {
+  // Fiji has islands at both 180 and -180 degrees of longitude. Measured
+  // from -180 to 180 it is as wide as the world, from 0 to 360 it is tiny.
+  return bounds[5] - bounds[4] < bounds[2] - bounds[0];
+}
+
+function tightBounds(bounds) {
+  // [west, south, east, north], where east can be more than 180
+  return crossesAntimeridian(bounds)
+    ? [bounds[4], bounds[1], bounds[5], bounds[3]]
+    : bounds.slice(0, 4);
+}
+
 function mapBounds(bounds) {
+  bounds = tightBounds(bounds);
   return [
     [bounds[0], Math.max(bounds[1], -85)],
     [bounds[2], Math.min(bounds[3], 85)],
@@ -264,26 +283,28 @@ function featureCollection(features) {
 function centerFeature(geometry, properties) {
   // A point in the middle of the geometry. z is the zoom level at which
   // the geometry is about 6 pixels across, on 512 pixel tiles.
-  const [west, south, east, north] = extendBounds(null, geometry);
+  const [west, south, east, north] = tightBounds(extendBounds(null, geometry));
   const span = Math.max(east - west, north - south, 1e-6);
+  const middle = (west + east) / 2;
   return {
     type: "Feature",
     properties: { ...properties, z: Math.log2((6 * 360) / (512 * span)) },
     geometry: {
       type: "Point",
-      coordinates: [(west + east) / 2, (south + north) / 2],
+      coordinates: [middle > 180 ? middle - 360 : middle, (south + north) / 2],
     },
   };
 }
 
 /* ---------- SVG outline of a geometry: instant, and needs no WebGL ---------- */
 
-function geojsonToSvg(geometries) {
+function geojsonToSvg(geometries, shift) {
+  // shift is true for shapes that cross the antimeridian
   const SVG = "http://www.w3.org/2000/svg";
   const project = ([lng, lat]) => {
     const clamped = Math.max(-85, Math.min(85, lat));
     const y = Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360));
-    return [(lng * Math.PI) / 180, -y];
+    return [((shift && lng < 0 ? lng + 360 : lng) * Math.PI) / 180, -y];
   };
   let box = null;
   geometries.forEach((geometry) =>
@@ -512,25 +533,14 @@ function setUpCells(cells) {
     injectCss();
   }
   cells.forEach((cell) => {
-    cell.svg = geojsonToSvg(cell.geometries);
-    cell.el = h("div", { class: "dmap-cell", "data-live": "false" });
+    cell.svg = geojsonToSvg(cell.geometries, crossesAntimeridian(cell.bounds));
+    cell.el = h("div", {
+      class: "dmap-cell",
+      "data-live": "false",
+      "data-bounds": tightBounds(cell.bounds).join(","),
+    });
     cell.el.appendChild(cell.svg);
     cell.td.replaceChildren(cell.el);
-    // Datasette 1.0 row pages collapse long values behind a "Show all 2,099
-    // characters" button. Datasette releases after 1.0a42 notice that the
-    // value is no longer text and mark it is-rich. For 1.0a42 and earlier,
-    // expand it here.
-    const collapsed = cell.td.closest(".row-field-long");
-    if (collapsed) {
-      setTimeout(() => {
-        if (!collapsed.classList.contains("is-rich")) {
-          collapsed.classList.add("is-expanded");
-          collapsed
-            .querySelectorAll(".row-field-expand")
-            .forEach((button) => button.remove());
-        }
-      }, 0);
-    }
     byElement.set(cell.el, cell);
     observer.observe(cell.el);
   });
@@ -1413,9 +1423,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         }
         complete = !nextUrl;
         updateData();
-        // Datasette 1.0 returns "count", earlier versions used
-        // "filtered_table_rows_count". count_truncated means it is a lower bound.
-        const total = data.count || data.filtered_table_rows_count;
+        // count_truncated means the count is a lower bound
+        const total = data.count;
         let ofTotal = "";
         let percent = "";
         if (total && data.count_truncated) {
@@ -1487,7 +1496,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     params.set("_labels", "on");
   }
   if (pageType === "table") {
-    // Datasette 1.0 rejects ?_extra= values it does not know about, and
+    // Datasette rejects ?_extra= values it does not know about, and
     // count is only available for tables and views
     params.set("_extra", "count");
   }

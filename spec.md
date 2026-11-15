@@ -56,6 +56,8 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [x] Globe toggle in the toolbar, replacing the 3D button and the globe control on the map
 - [x] Style menu removed: `style` is now just a URL or style object, default Liberty
 - [x] GeoJSON maps on Datasette 1.0 row pages are not collapsed behind "Show all N characters"
+- [x] Requires Datasette 1.0a43 or later: no workarounds for earlier versions, configuration in datasette.yaml
+- [x] Shapes that cross the antimeridian (Fiji, Russia) are fitted to their real extent, not the whole world
 
 ## Ideas not built
 

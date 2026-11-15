@@ -1,5 +1,5 @@
-# Datasette 1.0 reads canned queries from configuration, not metadata.
-# This is the same query as in metadata.yml, which is where Datasette 0.x looks.
+# Configuration for the demo: canned queries and datasette-maplibre settings.
+# Titles, descriptions and the tour itself are in metadata.yml.
 databases:
   demo:
     queries:
@@ -21,3 +21,30 @@ databases:
           from earthquakes
           where magnitude >= cast(:min_magnitude as real)
           order by magnitude desc
+    tables:
+      earthquakes:
+        plugins:
+          datasette-maplibre:
+            view: heatmap
+      landmarks:
+        plugins:
+          datasette-maplibre:
+            view: points
+            color_column: kind
+      countries:
+        plugins:
+          datasette-maplibre:
+            color_column: continent
+      rivers:
+        plugins:
+          datasette-maplibre:
+            color_column: kind
+      cities:
+        plugins:
+          datasette-maplibre:
+            view: points
+      capitals_and_countries:
+        plugins:
+          datasette-maplibre:
+            view: points
+            color_column: continent

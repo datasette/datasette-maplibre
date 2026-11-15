@@ -9,17 +9,13 @@ It combines the features of [datasette-cluster-map](https://github.com/simonw/da
 The `demo/` directory has a demo instance with a guided tour of every feature on its home page: 19 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
 
     uv run python demo/build.py
-    uv run datasette demo/demo.db -m demo/metadata.yml --setting max_returned_rows 5000
-
-On Datasette 1.0 add `-c demo/datasette.yml`. Datasette 1.0 reads canned queries from configuration instead of metadata, and without it the "Popups built in SQL" stop of the tour is a 404:
-
-    uv run --with datasette==1.0a42 datasette demo/demo.db -m demo/metadata.yml -c demo/datasette.yml --setting max_returned_rows 5000
+    uv run datasette demo/demo.db -m demo/metadata.yml -c demo/datasette.yml --setting max_returned_rows 5000
 
 `build.py` downloads about 14MB of open data to `demo/cache/` the first time it runs, then builds `demo/demo.db`. Run it with `--refresh` to fetch the data again, for example for more recent earthquakes.
 
 ## Installation
 
-Install this plugin in the same environment as Datasette.
+Install this plugin in the same environment as Datasette. It requires Datasette 1.0a43 or later.
 
     datasette install datasette-maplibre
 

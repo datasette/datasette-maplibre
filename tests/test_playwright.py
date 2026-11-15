@@ -384,11 +384,12 @@ def test_single_geojson_cell_has_no_overview_map(ds_server, page, errors):
 
 
 def test_long_geojson_on_a_row_page_is_not_collapsed(ds_server, page, errors):
-    # Datasette 1.0 hides most of a long value behind "Show all N characters"
+    # Datasette hides most of a long text value behind "Show all N characters",
+    # but not a value that a plugin has replaced with a map
     page.goto(ds_server + "/data/long_shape/1")
     cell = page.locator(".dmap-cell")
     expect(cell).to_have_attribute("data-live", "true")
-    expect(page.locator(".row-field-expand")).to_have_count(0)
+    expect(page.locator(".row-field-expand")).to_be_hidden()
     box = cell.bounding_box()
     assert box["height"] == 280
     # Nothing is clipping it
@@ -420,3 +421,34 @@ def test_points_and_shapes_on_one_map(ds_server, page, errors):
     expect(popup).to_contain_text("Popup description")
     # javascript: links are not allowed
     expect(popup.locator("a.dmap-popup-link")).to_have_count(0)
+
+
+def test_shape_crossing_the_antimeridian(ds_server, page, errors):
+    # Measured from -180 to 180 this shape is as wide as the world
+    page.goto(ds_server + "/data/dateline/1")
+    cell = page.locator(".dmap-cell")
+    expect(cell).to_have_attribute("data-live", "true")
+    expect(cell).to_have_attribute("data-bounds", "179,-18,181,-17")
+    # The SVG outline is two squares side by side, not one at each edge
+    box = cell.locator("svg").evaluate(
+        "svg => { const b = svg.getBBox(); return b.width / b.height; }"
+    )
+    assert 1.5 < box < 2.5
+
+
+def test_overview_map_of_shapes_crossing_the_antimeridian(ds_server, page, errors):
+    page.set_viewport_size({"width": 1200, "height": 900})
+    page.goto(ds_server + "/data/dateline")
+    overview = ready(page)
+    expect(overview).to_have_attribute("data-shapes", "2")
+    zoom, lng = page.evaluate(
+        "() => [datasette.maplibre.map.getZoom(), datasette.maplibre.map.getCenter().wrap().lng]"
+    )
+    # Zoomed in on the shapes, either side of 180 degrees
+    assert zoom > 5
+    assert abs(abs(lng) - 180) < 0.5
+    # The marker for a shape that is too small to see is in the middle of it
+    centers = page.evaluate(
+        "() => datasette.maplibre.map.getSource('dmap-centers').serialize().data.features.map(f => f.geometry.coordinates[0])"
+    )
+    assert centers == [180, 180]

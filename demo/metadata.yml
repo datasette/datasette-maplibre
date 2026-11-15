@@ -72,26 +72,6 @@ databases:
       earthquakes from the <a href="https://earthquake.usgs.gov/earthquakes/feed/">USGS</a>,
       countries, rivers and cities from <a href="https://www.naturalearthdata.com/">Natural Earth</a>,
       landmark photographs from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>.</p>
-    # Datasette 1.0 ignores queries in metadata: see datasette.yml
-    queries:
-      earthquake_popups:
-        title: Earthquakes with popups built in SQL
-        description_html: |-
-          <p>This query returns a <code>popup</code> column built with <code>json_object()</code>.
-          Click an earthquake: the popup links to its page on the USGS site.</p>
-        sql: |-
-          select
-            json_object(
-              'title', 'Magnitude ' || magnitude,
-              'description', place || ' - ' || time || ' UTC, ' || round(depth_km) || ' km deep',
-              'link', url
-            ) as popup,
-            magnitude,
-            latitude,
-            longitude
-          from earthquakes
-          where magnitude >= cast(:min_magnitude as real)
-          order by magnitude desc
     tables:
       power_plants:
         description_html: |-
@@ -110,45 +90,25 @@ databases:
         source: USGS Earthquake Hazards Program
         source_url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
         sort_desc: time
-        plugins:
-          datasette-maplibre:
-            view: heatmap
       landmarks:
         description_html: |-
           <p>Click a landmark for a popup with a photograph. The popup comes from the JSON in the <code>popup</code> column.
           Zoom right in to one, then drag with the right mouse button to tilt the map.</p>
-        plugins:
-          datasette-maplibre:
-            view: points
-            color_column: kind
       countries:
         description_html: |-
           <p>The <code>boundary</code> column is GeoJSON. Every cell is a map, and the map above the table shows
           all of the rows on this page together. Hover over a table row to find it on the map.</p>
         source: Natural Earth
         source_url: https://www.naturalearthdata.com/
-        plugins:
-          datasette-maplibre:
-            color_column: continent
       rivers:
         description_html: |-
           <p>The <code>course</code> column is a GeoJSON MultiLineString.</p>
         source: Natural Earth
         source_url: https://www.naturalearthdata.com/
-        plugins:
-          datasette-maplibre:
-            color_column: kind
       cities:
         source: Natural Earth
         source_url: https://www.naturalearthdata.com/
-        plugins:
-          datasette-maplibre:
-            view: points
       capitals_and_countries:
         description_html: |-
           <p>A SQL view. Each row has a point, from the <code>latitude</code> and <code>longitude</code> of the capital,
           and a shape, from the <code>boundary</code> of the country. Click either for the row.</p>
-        plugins:
-          datasette-maplibre:
-            view: points
-            color_column: continent

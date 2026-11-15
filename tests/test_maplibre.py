@@ -12,18 +12,18 @@ def config_from_html(html):
 
 
 async def make_datasette(plugin_config=None, table_plugin_config=None):
-    metadata = {}
+    config = {}
     if plugin_config:
-        metadata["plugins"] = {"datasette-maplibre": plugin_config}
+        config["plugins"] = {"datasette-maplibre": plugin_config}
     if table_plugin_config:
-        metadata["databases"] = {
+        config["databases"] = {
             "data": {
                 "tables": {
                     "places": {"plugins": {"datasette-maplibre": table_plugin_config}}
                 }
             }
         }
-    ds = Datasette(memory=True, metadata=metadata)
+    ds = Datasette(memory=True, config=config)
     db = ds.add_memory_database("data")
     await db.execute_write(
         "create table if not exists places "
@@ -132,7 +132,7 @@ async def test_default_config_on_table_page():
 )
 async def test_location_columns_detected_per_page(path, has_location):
     ds = await make_datasette()
-    # Datasette 1.0 redirects /data?sql= to /data/-/query?sql=
+    # /data?sql= redirects to /data/-/query?sql=
     response = await ds.client.get(path, follow_redirects=True)
     assert response.status_code == 200
     config = config_from_html(response.text)
