@@ -1,5 +1,10 @@
 # datasette-maplibre
 
+[![PyPI](https://img.shields.io/pypi/v/datasette-maplibre.svg)](https://pypi.org/project/datasette-maplibre/)
+[![Changelog](https://img.shields.io/github/v/release/datasette/datasette-maplibre?include_prereleases&label=changelog)](https://github.com/datasette/datasette-maplibre/releases)
+[![Tests](https://github.com/datasette/datasette-maplibre/actions/workflows/test.yml/badge.svg)](https://github.com/datasette/datasette-maplibre/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/datasette/datasette-maplibre/blob/main/LICENSE)
+
 Datasette plugin that maps latitude/longitude and GeoJSON data using [MapLibre GL](https://maplibre.org/) and [OpenFreeMap](https://openfreemap.org/).
 
 It combines the features of [datasette-cluster-map](https://github.com/simonw/datasette-cluster-map) and [datasette-leaflet-geojson](https://github.com/simonw/datasette-leaflet-geojson) on a vector map, and adds some of its own.
