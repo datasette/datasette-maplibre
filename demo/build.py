@@ -172,7 +172,9 @@ def build(refresh=False):
     )
     for feature in features("rivers.geojson", refresh):
         properties = feature["properties"]
-        if not properties.get("name") or not feature.get("geometry"):
+        geometry = feature.get("geometry") or {}
+        if not properties.get("name") or not geometry.get("coordinates"):
+            # One of the rivers has an empty list of coordinates
             continue
         db.execute(
             "insert into rivers (name, kind, scale_rank, course) values (?, ?, ?, ?)",

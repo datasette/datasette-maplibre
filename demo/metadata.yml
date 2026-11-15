@@ -73,6 +73,7 @@ databases:
       earthquakes from the <a href="https://earthquake.usgs.gov/earthquakes/feed/">USGS</a>,
       countries, rivers and cities from <a href="https://www.naturalearthdata.com/">Natural Earth</a>,
       landmark photographs from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>.</p>
+    # Datasette 1.0 ignores queries in metadata: see datasette.yml
     queries:
       earthquake_popups:
         title: Earthquakes with popups built in SQL

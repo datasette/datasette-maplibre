@@ -1,0 +1,23 @@
+# Datasette 1.0 reads canned queries from configuration, not metadata.
+# This is the same query as in metadata.yml, which is where Datasette 0.x looks.
+databases:
+  demo:
+    queries:
+      earthquake_popups:
+        title: Earthquakes with popups built in SQL
+        description_html: |-
+          <p>This query returns a <code>popup</code> column built with <code>json_object()</code>.
+          Click an earthquake: the popup links to its page on the USGS site.</p>
+        sql: |-
+          select
+            json_object(
+              'title', 'Magnitude ' || magnitude,
+              'description', place || ' - ' || time || ' UTC, ' || round(depth_km) || ' km deep',
+              'link', url
+            ) as popup,
+            magnitude,
+            latitude,
+            longitude
+          from earthquakes
+          where magnitude >= cast(:min_magnitude as real)
+          order by magnitude desc

@@ -11,6 +11,10 @@ The `demo/` directory has a demo instance with a guided tour of every feature on
     uv run python demo/build.py
     uv run datasette demo/demo.db -m demo/metadata.yml --setting max_returned_rows 5000
 
+On Datasette 1.0 add `-c demo/datasette.yml`. Datasette 1.0 reads canned queries from configuration instead of metadata, and without it the "Popups built in SQL" stop of the tour is a 404:
+
+    uv run --with datasette==1.0a42 datasette demo/demo.db -m demo/metadata.yml -c demo/datasette.yml --setting max_returned_rows 5000
+
 `build.py` downloads about 14MB of open data to `demo/cache/` the first time it runs, then builds `demo/demo.db`. Run it with `--refresh` to fetch the data again, for example for more recent earthquakes.
 
 ## Installation
