@@ -517,13 +517,19 @@ function setUpCells(cells) {
     cell.el.appendChild(cell.svg);
     cell.td.replaceChildren(cell.el);
     // Datasette 1.0 row pages collapse long values behind a "Show all 2,099
-    // characters" button. A map is not long, so undo that.
+    // characters" button. Datasette releases after 1.0a42 notice that the
+    // value is no longer text and mark it is-rich. For 1.0a42 and earlier,
+    // expand it here.
     const collapsed = cell.td.closest(".row-field-long");
     if (collapsed) {
-      collapsed.classList.add("is-expanded");
-      collapsed
-        .querySelectorAll(".row-field-expand")
-        .forEach((button) => button.remove());
+      setTimeout(() => {
+        if (!collapsed.classList.contains("is-rich")) {
+          collapsed.classList.add("is-expanded");
+          collapsed
+            .querySelectorAll(".row-field-expand")
+            .forEach((button) => button.remove());
+        }
+      }, 0);
     }
     byElement.set(cell.el, cell);
     observer.observe(cell.el);
@@ -902,13 +908,18 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     if (!style || !style.glyphs) {
       return null;
     }
+    const fonts = [];
     for (const layer of style.layers || []) {
       const font = layer.layout && layer.layout["text-font"];
       if (Array.isArray(font) && font.every((name) => typeof name === "string")) {
-        return font;
+        fonts.push(font);
       }
     }
-    return null;
+    // Prefer an upright bold font, then any upright font
+    const upright = fonts.filter((font) => !/italic|oblique/i.test(font[0]));
+    return (
+      upright.find((font) => /bold/i.test(font[0])) || upright[0] || fonts[0] || null
+    );
   }
 
   function heatmapIntensity() {
@@ -1039,10 +1050,11 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
             1000,
             "#1e3a8a",
           ],
-          "circle-opacity": 0.85,
-          "circle-radius": ["step", ["get", "point_count"], 15, 10, 19, 100, 24, 1000, 30],
+          "circle-opacity": 0.9,
+          // Just big enough for the label: 9, 99, 999 and 9.9k
+          "circle-radius": ["step", ["get", "point_count"], 10, 10, 12, 100, 15, 1000, 18],
           "circle-stroke-color": "#fff",
-          "circle-stroke-width": 2,
+          "circle-stroke-width": 1.5,
         },
       });
       layerIds.push("dmap-cluster");
@@ -1056,7 +1068,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
           layout: {
             "text-field": ["get", "point_count_abbreviated"],
             "text-font": font,
-            "text-size": 12,
+            "text-size": 11,
             "text-allow-overlap": true,
           },
           paint: { "text-color": "#fff" },

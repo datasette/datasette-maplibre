@@ -98,7 +98,7 @@ All of these are optional. They can be set for the whole instance, for a databas
             "height": "70vh",
             "scroll_zoom": true,
             "max_cell_maps": 12,
-            "cluster_radius": 40,
+            "cluster_radius": 50,
             "container": "#map-goes-here"
         }
     }
@@ -112,7 +112,7 @@ All of these are optional. They can be set for the whole instance, for a databas
 - `height` - CSS height of the overview map, default `500px`
 - `scroll_zoom` - set to `true` to zoom the overview map with the scroll wheel alone
 - `max_cell_maps` - how many GeoJSON cells can be interactive maps at once, default 8
-- `cluster_radius` - cluster radius in pixels, default 50
+- `cluster_radius` - how close points have to be, in pixels, to be merged into one cluster. Default 25. Smaller values give more, smaller clusters.
 - `container` - CSS selector of an element to add the overview map to, instead of above the table
 
 The MapLibre map object for the overview map is available to other JavaScript as `datasette.maplibre.map`.

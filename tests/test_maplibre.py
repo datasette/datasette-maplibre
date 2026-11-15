@@ -105,7 +105,7 @@ async def test_default_config_on_table_page():
     assert config["view"] == "clusters"
     assert config["height"] == "500px"
     assert config["maxCellMaps"] == 8
-    assert config["clusterRadius"] == 50
+    assert config["clusterRadius"] == 25
     assert config["scrollZoom"] is False
     assert config["colorColumn"] is None
     assert config["container"] is None
