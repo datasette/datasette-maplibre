@@ -53,3 +53,4 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [ ] SpatiaLite geometry blobs and WKT values, not just GeoJSON text
 - [ ] Row links in popups for rows that are not on the current page
 - [ ] Draw a polygon on the map to filter by
+- [x] Datasette 1.0 alpha support: row pages are a `<dl class="row-fields">` there, and `/db?sql=` redirects to `/db/-/query`

@@ -133,7 +133,8 @@ async def test_default_config_on_table_page():
 )
 async def test_location_columns_detected_per_page(path, has_location):
     ds = await make_datasette()
-    response = await ds.client.get(path)
+    # Datasette 1.0 redirects /data?sql= to /data/-/query?sql=
+    response = await ds.client.get(path, follow_redirects=True)
     assert response.status_code == 200
     config = config_from_html(response.text)
     assert (config["latitudeColumn"] is not None) == has_location

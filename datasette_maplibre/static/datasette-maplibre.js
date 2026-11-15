@@ -6,6 +6,12 @@
 
 const config = (window.datasette && window.datasette.maplibre) || null;
 
+// Datasette 1.0 row pages are a <dl class="row-fields">, not a table
+const DATA_SELECTOR = "table.rows-and-columns, dl.row-fields";
+const CELL_SELECTOR = "table.rows-and-columns td, dl.row-fields .row-field-value";
+const COLUMN_SELECTOR =
+  "table.rows-and-columns th, dl.row-fields .row-field[data-column]";
+
 const GEOJSON_TYPES = new Set([
   "Point",
   "MultiPoint",
@@ -360,7 +366,7 @@ function resolveStyle(label) {
 
 function findGeoJSONCells() {
   const cells = [];
-  document.querySelectorAll("table.rows-and-columns td").forEach((td) => {
+  document.querySelectorAll(CELL_SELECTOR).forEach((td) => {
     const text = td.textContent;
     if (!text || text.trim()[0] !== "{") {
       return;
@@ -775,7 +781,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     } else {
       const table =
         document.querySelector(".table-wrapper") ||
-        document.querySelector("table.rows-and-columns");
+        document.querySelector(DATA_SELECTOR);
       table.parentNode.insertBefore(wrapper, table);
     }
   };
@@ -1378,7 +1384,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
 /* ---------- Start ---------- */
 
 function start() {
-  if (!config || !document.querySelector("table.rows-and-columns")) {
+  if (!config || !document.querySelector(DATA_SELECTOR)) {
     return;
   }
   const body = document.body.classList;
@@ -1388,9 +1394,9 @@ function start() {
       ? "row"
       : "query";
   const cells = findGeoJSONCells();
-  const columns = Array.from(
-    document.querySelectorAll("table.rows-and-columns th")
-  ).map((th) => (th.getAttribute("data-column") || th.textContent).trim());
+  const columns = Array.from(document.querySelectorAll(COLUMN_SELECTOR)).map(
+    (th) => (th.getAttribute("data-column") || th.textContent).trim()
+  );
   const find = (name) =>
     (name && columns.find((c) => c.toLowerCase() === name.toLowerCase())) || null;
   const latitudeColumn = find(config.latitudeColumn);
