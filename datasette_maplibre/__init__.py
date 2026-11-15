@@ -107,7 +107,17 @@ def json_for_script(value):
 
 
 def plugin_config(datasette, database=None, table=None):
-    return datasette.plugin_config(PLUGIN_NAME, database=database, table=table) or {}
+    # Datasette returns only the most specific configuration. Merge the
+    # levels instead, so a table can override one setting and keep the rest.
+    config = {}
+    levels = [{}]
+    if database:
+        levels.append({"database": database})
+        if table:
+            levels.append({"database": database, "table": table})
+    for level in levels:
+        config.update(datasette.plugin_config(PLUGIN_NAME, **level) or {})
+    return config
 
 
 def resolve_styles(config):

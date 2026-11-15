@@ -159,11 +159,13 @@ async def test_configured_columns():
 @pytest.mark.asyncio
 async def test_table_level_configuration():
     ds = await make_datasette(
-        {"view": "points"},
+        {"view": "points", "style": "dark"},
         {"view": "heatmap", "color_column": "name", "height": "300px"},
     )
     config = config_from_html((await ds.client.get("/data/places")).text)
     assert config["view"] == "heatmap"
+    # Settings the table does not override are inherited
+    assert config["style"] == "Dark"
     assert config["colorColumn"] == "name"
     assert config["height"] == "300px"
     config = config_from_html((await ds.client.get("/data/plain")).text)
