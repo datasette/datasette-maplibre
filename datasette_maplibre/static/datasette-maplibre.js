@@ -850,6 +850,13 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     return null;
   }
 
+  function heatmapIntensity() {
+    // The more points there are, the less each one contributes - otherwise
+    // a few hundred points are enough to turn the whole heatmap solid red
+    const k = Math.min(1, 40 / Math.max(points.length, 1));
+    return ["interpolate", ["linear"], ["zoom"], 0, k, 15, k * 6];
+  }
+
   function installLayers() {
     updateStatus();
     if (!map || !styleReady) {
@@ -909,8 +916,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         maxzoom: 15,
         paint: {
           "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 6, 9, 24, 15, 40],
-          "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
-          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.85, 15, 0],
+          "heatmap-intensity": heatmapIntensity(),
+          "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.7, 15, 0],
         },
       });
       // Individual points fade in as the heatmap fades out
@@ -1017,6 +1024,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       map.getSource(POINTS_SOURCE).setData(featureCollection(points));
       map.getSource(SHAPES_SOURCE).setData(featureCollection(shapes));
       map.getSource(CENTERS_SOURCE).setData(featureCollection(centers));
+      if (map.getLayer("dmap-heat")) {
+        map.setPaintProperty("dmap-heat", "heatmap-intensity", heatmapIntensity());
+      }
     }
     if (map && bounds && !hadHash && !movedSinceFit()) {
       map.fitBounds(mapBounds(bounds), { padding: 50, maxZoom: 14, animate: false });
