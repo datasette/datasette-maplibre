@@ -42,11 +42,11 @@ const CSS = `
 .dmap-toolbar label { display: inline-flex; align-items: center; gap: 0.3em; }
 .dmap-toolbar select { font-size: 0.8rem; max-width: 12em; }
 .dmap-toolbar .dmap-spacer { flex: 1; }
-.dmap button { color: #fff; background-color: #007bff; border: 1px solid #0062cc;
+.dmap-toolbar button, .dmap-progress button { color: #fff; background-color: #007bff; border: 1px solid #0062cc;
   cursor: pointer; padding: 0.3em 0.7em; font-size: 0.75rem; line-height: 1.2;
   border-radius: 0.25rem; }
-.dmap button.dmap-secondary { color: #333; background: #fff; border-color: #bbb; }
-.dmap button[aria-pressed="true"] { background: #333; color: #fff; border-color: #333; }
+.dmap-toolbar button.dmap-secondary { color: #333; background: #fff; border-color: #bbb; }
+.dmap-toolbar button[aria-pressed="true"] { background: #333; color: #fff; border-color: #333; }
 .dmap-map { width: 100%; background: #eee; }
 .dmap-legend { display: flex; flex-wrap: wrap; gap: 0.2em 1em; font-size: 0.75rem;
   margin-top: 0.4em; align-items: center; }
@@ -216,6 +216,21 @@ function mapBounds(bounds) {
 
 function featureCollection(features) {
   return { type: "FeatureCollection", features };
+}
+
+function centerFeature(geometry, properties) {
+  // A point in the middle of the geometry. z is the zoom level at which
+  // the geometry is about 24 pixels across, on 512 pixel tiles.
+  const [west, south, east, north] = extendBounds(null, geometry);
+  const span = Math.max(east - west, north - south, 1e-6);
+  return {
+    type: "Feature",
+    properties: { ...properties, z: Math.log2((24 * 360) / (512 * span)) },
+    geometry: {
+      type: "Point",
+      coordinates: [(west + east) / 2, (south + north) / 2],
+    },
+  };
 }
 
 /* ---------- SVG outline of a geometry: instant, and needs no WebGL ---------- */
@@ -420,6 +435,12 @@ function setUpCells(cells) {
             ),
           });
           addShapeLayers(map, "geojson", "geojson", POINT_COLOR);
+          // The attribution starts expanded, which hides a lot of a small map
+          const attribution = cell.mapEl.querySelector(".maplibregl-ctrl-attrib");
+          if (attribution) {
+            attribution.classList.remove("maplibregl-compact-show");
+            attribution.removeAttribute("open");
+          }
           cell.svg.style.visibility = "hidden";
           cell.el.dataset.live = "true";
         });
@@ -606,17 +627,20 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   const POINTS_SOURCE = "dmap-points";
   const SHAPES_SOURCE = "dmap-shapes";
   const HIGHLIGHT_SOURCE = "dmap-highlight";
+  const CENTERS_SOURCE = "dmap-centers";
 
   const rows = [];
   const points = [];
   const shapes = [];
+  // A point for every shape, shown while the shape is too small to see
+  const centers = [];
   let shapeRows = 0;
   let bounds = null;
   let library = null;
   let map = null;
   let styleReady = false;
   let layerIds = [];
-  let userMoved = false;
+  let lastFit = null;
   let keepGoing = false;
   let complete = false;
   let view = config.view;
@@ -760,6 +784,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     wrapper.dataset.rows = rows.length;
     wrapper.dataset.points = points.length;
     wrapper.dataset.shapes = shapes.length;
+    wrapper.dataset.moved = String(Boolean(map) && movedSinceFit());
     wrapper.dataset.complete = String(complete);
     wrapper.dataset.view = view;
     wrapper.dataset.styleReady = String(styleReady);
@@ -782,6 +807,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         zoom: 1,
         // Keeps the position of the map in the URL, as #map=zoom/lat/lng
         hash: "map",
+        // Scrolling the page should not zoom the map: ctrl + scroll does
+        cooperativeGestures: !config.scrollZoom,
       });
     } catch (error) {
       console.warn("datasette-maplibre: map creation failed", error);
@@ -795,11 +822,6 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     map.on("style.load", () => {
       styleReady = true;
       installLayers();
-    });
-    map.on("movestart", (ev) => {
-      if (ev.originalEvent) {
-        userMoved = true;
-      }
     });
     map.on("click", onClick);
     map.on("mousemove", (ev) => {
@@ -834,7 +856,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       return;
     }
     layerIds.forEach((id) => map.getLayer(id) && map.removeLayer(id));
-    [POINTS_SOURCE, SHAPES_SOURCE, HIGHLIGHT_SOURCE].forEach(
+    [POINTS_SOURCE, SHAPES_SOURCE, HIGHLIGHT_SOURCE, CENTERS_SOURCE].forEach(
       (id) => map.getSource(id) && map.removeSource(id)
     );
     const color = scale ? scale.expression : POINT_COLOR;
@@ -853,7 +875,26 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       type: "geojson",
       data: featureCollection([]),
     });
+    map.addSource(CENTERS_SOURCE, {
+      type: "geojson",
+      data: featureCollection(centers),
+    });
     layerIds = addShapeLayers(map, SHAPES_SOURCE, "dmap-shapes", color);
+    map.addLayer({
+      id: "dmap-center",
+      type: "circle",
+      source: CENTERS_SOURCE,
+      // Only while the map is zoomed out too far for the shape to be visible
+      filter: [">", ["get", "z"], ["zoom"]],
+      paint: {
+        "circle-color": color,
+        "circle-radius": 6,
+        "circle-opacity": 0.6,
+        "circle-stroke-color": color,
+        "circle-stroke-width": 2,
+      },
+    });
+    layerIds.push("dmap-center");
     const pointPaint = {
       "circle-color": color,
       "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 4, 12, 7],
@@ -957,13 +998,29 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     updateStatus();
   }
 
+  function camera() {
+    const center = map.getCenter();
+    return [center.lng, center.lat, map.getZoom()];
+  }
+
+  function movedSinceFit() {
+    // Once the map has been moved, by the user or by other code, stop
+    // fitting it to the data as more rows load
+    return (
+      lastFit !== null &&
+      camera().some((value, i) => Math.abs(value - lastFit[i]) > 1e-6)
+    );
+  }
+
   function updateData() {
     if (map && styleReady && map.getSource(POINTS_SOURCE)) {
       map.getSource(POINTS_SOURCE).setData(featureCollection(points));
       map.getSource(SHAPES_SOURCE).setData(featureCollection(shapes));
+      map.getSource(CENTERS_SOURCE).setData(featureCollection(centers));
     }
-    if (map && bounds && !userMoved && !hadHash) {
+    if (map && bounds && !hadHash && !movedSinceFit()) {
       map.fitBounds(mapBounds(bounds), { padding: 50, maxZoom: 14, animate: false });
+      lastFit = camera();
     }
     updateStatus();
   }
@@ -980,6 +1037,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       const feature = { type: "Feature", properties, geometry };
       (geometry.type === "Point" ? points : shapes).push(feature);
       bounds = extendBounds(bounds, geometry);
+      if (geometry.type !== "Point") {
+        centers.push(centerFeature(geometry, properties));
+      }
       located = true;
     };
     if (
@@ -1057,7 +1117,6 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         .getSource(POINTS_SOURCE)
         .getClusterExpansionZoom(feature.properties.cluster_id)
         .then((zoom) => {
-          userMoved = true;
           map.easeTo({ center: feature.geometry.coordinates, zoom });
         });
       return;
@@ -1162,7 +1221,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
 
   function applyColor() {
     scale = colorColumn ? colorScale(rows, colorColumn) : null;
-    points.concat(shapes).forEach((feature) => {
+    points.concat(shapes, centers).forEach((feature) => {
       if (scale) {
         feature.properties.c = scale.value(rows[feature.properties._row]);
       } else {

@@ -68,6 +68,38 @@ def test_load_all_paginates_through_table(ds_server, page, errors):
     assert [response.status for response in responses] == [200, 200, 200]
 
 
+def test_loading_more_rows_does_not_move_a_map_that_has_been_moved(
+    ds_server, page, errors
+):
+    page.goto(ds_server + "/data/paginated")
+    overview = ready(page)
+    page.evaluate("() => datasette.maplibre.map.jumpTo({center: [10, 50], zoom: 5})")
+    overview.get_by_role("button", name="load all").click()
+    expect(overview).to_have_attribute("data-points", "25")
+    assert page.evaluate("() => datasette.maplibre.map.getZoom()") == 5
+
+
+def test_map_is_fitted_to_all_rows_as_they_load(ds_server, page, errors):
+    page.goto(ds_server + "/data/paginated")
+    overview = ready(page)
+    before = page.evaluate("() => datasette.maplibre.map.getZoom()")
+    overview.get_by_role("button", name="load all").click()
+    expect(overview).to_have_attribute("data-points", "25")
+    assert page.evaluate("() => datasette.maplibre.map.getZoom()") < before
+    expect(overview).to_have_attribute("data-moved", "false")
+
+
+def test_scrolling_the_page_does_not_zoom_the_map(ds_server, page, errors):
+    page.goto(ds_server + "/data/two_points")
+    ready(page)
+    page.wait_for_function("() => datasette.maplibre.map.loaded()")
+    before = page.evaluate("() => datasette.maplibre.map.getZoom()")
+    page.locator(".dmap-map canvas").hover()
+    page.mouse.wheel(0, 300)
+    page.wait_for_timeout(500)
+    assert page.evaluate("() => datasette.maplibre.map.getZoom()") == before
+
+
 @pytest.mark.parametrize(
     "path",
     ("/data/no_locations", "/data?sql=select+*+from+no_locations"),
@@ -260,6 +292,15 @@ def test_geojson_cells(ds_server, page, errors):
     overview = ready(page)
     expect(overview).to_have_attribute("data-shapes", "6")
     expect(overview).to_have_attribute("data-points", "0")
+    # Shapes too small to see at this zoom level are marked with a circle
+    page.wait_for_function("() => datasette.maplibre.map.loaded()")
+    count_centers = "() => datasette.maplibre.map.queryRenderedFeatures({layers: ['dmap-center']}).length"
+    page.evaluate("() => datasette.maplibre.map.jumpTo({zoom: 10})")
+    page.wait_for_function("() => datasette.maplibre.map.loaded()")
+    assert page.evaluate(count_centers) == 0
+    page.evaluate("() => datasette.maplibre.map.jumpTo({zoom: 1})")
+    page.wait_for_function("() => datasette.maplibre.map.loaded()")
+    assert page.evaluate(count_centers) > 0
     # Scrolling to the last cell makes it live, and another falls back to SVG
     cells.nth(5).scroll_into_view_if_needed()
     expect(cells.nth(5)).to_have_attribute("data-live", "true")

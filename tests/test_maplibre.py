@@ -107,6 +107,7 @@ async def test_default_config_on_table_page():
     assert config["height"] == "500px"
     assert config["maxCellMaps"] == 8
     assert config["clusterRadius"] == 50
+    assert config["scrollZoom"] is False
     assert config["colorColumn"] is None
     assert config["container"] is None
     assert config["maplibreUrl"].endswith(
@@ -160,7 +161,12 @@ async def test_configured_columns():
 async def test_table_level_configuration():
     ds = await make_datasette(
         {"view": "points", "style": "dark"},
-        {"view": "heatmap", "color_column": "name", "height": "300px"},
+        {
+            "view": "heatmap",
+            "color_column": "name",
+            "height": "300px",
+            "scroll_zoom": True,
+        },
     )
     config = config_from_html((await ds.client.get("/data/places")).text)
     assert config["view"] == "heatmap"
@@ -168,6 +174,7 @@ async def test_table_level_configuration():
     assert config["style"] == "Dark"
     assert config["colorColumn"] == "name"
     assert config["height"] == "300px"
+    assert config["scrollZoom"] is True
     config = config_from_html((await ds.client.get("/data/plain")).text)
     assert config["view"] == "points"
 

@@ -87,6 +87,7 @@ def extra_body_script(database, table, columns, datasette):
         "colorColumn": config.get("color_column"),
         "maxCellMaps": config.get("max_cell_maps") or 8,
         "clusterRadius": config.get("cluster_radius") or 50,
+        "scrollZoom": bool(config.get("scroll_zoom")),
     }
     return (
         "window.datasette = window.datasette || {};\n"
