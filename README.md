@@ -4,6 +4,15 @@ Datasette plugin that maps latitude/longitude and GeoJSON data using [MapLibre G
 
 It combines the features of [datasette-cluster-map](https://github.com/simonw/datasette-cluster-map) and [datasette-leaflet-geojson](https://github.com/simonw/datasette-leaflet-geojson) on a vector map, and adds some of its own. No API key is needed.
 
+## Demo
+
+The `demo/` directory has a demo instance with a guided tour of every feature on its home page: 20 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
+
+    uv run python demo/build.py
+    uv run datasette demo/demo.db -m demo/metadata.yml --setting max_returned_rows 5000
+
+`build.py` downloads about 14MB of open data to `demo/cache/` the first time it runs, then builds `demo/demo.db`. Run it with `--refresh` to fetch the data again, for example for more recent earthquakes.
+
 ## Installation
 
 Install this plugin in the same environment as Datasette.
@@ -43,7 +52,8 @@ Other things to know:
 - Clicking a point or shape shows a popup with the row, and highlights that row in the table if it is on the current page.
 - Hovering over a table row highlights its point or shape on the map.
 - Shapes that are too small to see at the current zoom level are marked with a circle.
-- The position of the map is kept in the URL, as `#map=zoom/latitude/longitude`, so a link to the page is a link to that view of the map.
+- The position of the map is kept in the URL, as `#map=zoom/latitude/longitude`, so a link to the page is a link to that view of the map. So are the view, colour and style when they differ from the configured ones: `#view=heatmap&color=fuel&style=Dark`. These can be used in links you write yourself.
+- The map never zooms out so far that the world is repeated side by side.
 - Scrolling the page does not zoom the map. Use ctrl + scroll (⌘ + scroll on macOS), or the zoom buttons.
 
 ### A map for every GeoJSON value

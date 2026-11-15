@@ -1,0 +1,159 @@
+title: datasette-maplibre demo
+description_html: |-
+  <p>A tour of <a href="https://github.com/simonw/datasette-maplibre">datasette-maplibre</a>,
+  a Datasette plugin that maps latitude/longitude columns and GeoJSON values with
+  MapLibre GL and OpenFreeMap. Each link opens the map set up to show one feature.</p>
+
+  <h3 style="margin-top: 1em">Points</h3>
+  <ol style="list-style: decimal; padding-left: 2em">
+    <li><a href="demo/power_plants"><strong>Clusters and "load all"</strong></a> -
+      34,936 power plants. The first 5,000 rows are on the map: press <em>load all</em>
+      under the map to fetch the rest, and <em>pause</em> to stop. Click a cluster to zoom in to it.</li>
+    <li><a href="demo/power_plants?country=Germany#view=points&amp;color=fuel"><strong>Colour by a category</strong></a> -
+      German power plants coloured by fuel, with a legend of counts. Try <em>Colour by</em> owner or country.</li>
+    <li><a href="demo/power_plants?country=Brazil&amp;fuel=Hydro#view=points&amp;color=capacity_mw"><strong>Colour by a number</strong></a> -
+      Brazilian hydro plants on a colour ramp of capacity.</li>
+    <li><a href="demo/earthquakes"><strong>Heatmap</strong></a> -
+      a month of earthquakes. Zoom in and the heatmap fades into individual points.</li>
+    <li><a href="demo/power_plants#map=5.2/36.6/137.5"><strong>Filter to this area</strong></a> -
+      the map is over Japan. Press <em>Filter to this area</em> and the table reloads with
+      only the rows on the map, as ordinary Datasette filters you can facet, sort and export.</li>
+    <li><a href="demo/power_plants?country=Iceland#view=points&amp;color=fuel"><strong>The table and the map are linked</strong></a> -
+      hover over a table row to highlight it on the map. Click a point and its row is highlighted in the table.</li>
+  </ol>
+
+  <h3 style="margin-top: 1em">Popups</h3>
+  <ol start="7" style="list-style: decimal; padding-left: 2em">
+    <li><a href="demo/landmarks"><strong>Popups with photos</strong></a> -
+      click a landmark. The <code>popup</code> column holds JSON with a title, image, description and link.</li>
+    <li><a href="demo/earthquake_popups?min_magnitude=5.5"><strong>Popups built in SQL</strong></a> -
+      a canned query that assembles the popup with <code>json_object()</code>. Works for any SQL query.</li>
+  </ol>
+
+  <h3 style="margin-top: 1em">The map itself</h3>
+  <ol start="9" style="list-style: decimal; padding-left: 2em">
+    <li><a href="demo/landmarks#map=16.3/40.7478/-73.9853/-25/60&amp;style=Liberty"><strong>3D</strong></a> -
+      the Empire State Building, tilted. The <em>3D</em> button toggles the tilt; right-drag (or ctrl-drag) to rotate.</li>
+    <li><a href="demo/earthquakes#map=1.6/15/-150&amp;view=points&amp;color=magnitude"><strong>Globe</strong></a> -
+      press the globe button, top right of the map, then drag the world around.</li>
+    <li><a href="demo/power_plants?country=Italy#view=points&amp;color=fuel&amp;style=Dark"><strong>Styles</strong></a> -
+      the <em>Style</em> menu switches between the five OpenFreeMap styles. This link starts in Dark.</li>
+    <li><a href="demo/landmarks#map=12.5/41.8902/12.4922&amp;style=Positron"><strong>Links remember everything</strong></a> -
+      map position, view, colour and style are all kept in the URL, so any view can be bookmarked or shared.</li>
+  </ol>
+
+  <h3 style="margin-top: 1em">GeoJSON</h3>
+  <ol start="13" style="list-style: decimal; padding-left: 2em">
+    <li><a href="demo/countries"><strong>A map in every GeoJSON cell</strong></a> -
+      scroll down the table. Each boundary is an instant SVG outline that becomes a live map
+      as it scrolls into view, so 177 maps on one page is not a problem.</li>
+    <li><a href="demo/countries#color=income_group"><strong>Every shape on one map</strong></a> -
+      the map above the table draws all 177 countries, here coloured by income group.
+      Try <em>Colour by</em> population or continent.</li>
+    <li><a href="demo/countries?continent=Europe"><strong>Shapes too small to see get a marker</strong></a> -
+      Luxembourg is a dot at this zoom level. Zoom in and the dot is replaced by its outline.</li>
+    <li><a href="demo/rivers"><strong>Lines</strong></a> - rivers and lake centre lines.</li>
+    <li><a href="demo/capitals_and_countries"><strong>Points and shapes together</strong></a> -
+      a SQL view with latitude and longitude columns for each capital and a GeoJSON column for its country.</li>
+  </ol>
+
+  <h3 style="margin-top: 1em">Everywhere else</h3>
+  <ol start="18" style="list-style: decimal; padding-left: 2em">
+    <li><a href="demo/landmarks/4"><strong>Row pages</strong></a> get a map too:
+      here is the Golden Gate Bridge, and here is <a href="demo/countries/142">a single country</a>.</li>
+    <li><a href="demo?sql=select+name%2C+population%2C+latitude%2C+longitude+from+cities+where+population+%3E+5000000+order+by+population+desc#view=points&amp;color=population"><strong>Any SQL query</strong></a>
+      with latitude and longitude columns, or a GeoJSON column, is mapped.</li>
+    <li><strong>Download GeoJSON</strong>, on every map, saves whatever is loaded onto it.</li>
+  </ol>
+databases:
+  demo:
+    description_html: |-
+      <p>Data for the <a href="/">datasette-maplibre tour</a>. Power plants from the
+      <a href="https://datasets.wri.org/dataset/globalpowerplantdatabase">WRI Global Power Plant Database</a> (CC BY 4.0),
+      earthquakes from the <a href="https://earthquake.usgs.gov/earthquakes/feed/">USGS</a>,
+      countries, rivers and cities from <a href="https://www.naturalearthdata.com/">Natural Earth</a>,
+      landmark photographs from <a href="https://commons.wikimedia.org/">Wikimedia Commons</a>.</p>
+    queries:
+      earthquake_popups:
+        title: Earthquakes with popups built in SQL
+        description_html: |-
+          <p>This query returns a <code>popup</code> column built with <code>json_object()</code>.
+          Click an earthquake: the popup links to its page on the USGS site.</p>
+        sql: |-
+          select
+            json_object(
+              'title', 'Magnitude ' || magnitude,
+              'description', place || ' - ' || time || ' UTC, ' || round(depth_km) || ' km deep',
+              'link', url
+            ) as popup,
+            magnitude,
+            latitude,
+            longitude
+          from earthquakes
+          where magnitude >= cast(:min_magnitude as real)
+          order by magnitude desc
+    tables:
+      power_plants:
+        description_html: |-
+          <p>Press <em>load all</em> under the map to load every row. Switch <em>View</em> to Heatmap,
+          set <em>Colour by</em> to fuel, or zoom somewhere and press <em>Filter to this area</em>.</p>
+        source: WRI Global Power Plant Database
+        source_url: https://datasets.wri.org/dataset/globalpowerplantdatabase
+        license: CC BY 4.0
+        license_url: https://creativecommons.org/licenses/by/4.0/
+        facets:
+        - fuel
+      earthquakes:
+        description_html: |-
+          <p>Magnitude 4.5 and above, last 30 days. This table is configured to open as a heatmap on the Dark style.
+          Zoom in and the heatmap fades into points. Try <em>View</em>: Points with <em>Colour by</em>: magnitude.</p>
+        source: USGS Earthquake Hazards Program
+        source_url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
+        sort_desc: time
+        plugins:
+          datasette-maplibre:
+            view: heatmap
+            style: dark
+      landmarks:
+        description_html: |-
+          <p>Click a landmark for a popup with a photograph. The popup comes from the JSON in the <code>popup</code> column.
+          Zoom right in to one and press <em>3D</em>.</p>
+        plugins:
+          datasette-maplibre:
+            view: points
+            color_column: kind
+            style: bright
+      countries:
+        description_html: |-
+          <p>The <code>boundary</code> column is GeoJSON. Every cell is a map, and the map above the table shows
+          all of the rows on this page together. Hover over a table row to find it on the map.</p>
+        source: Natural Earth
+        source_url: https://www.naturalearthdata.com/
+        plugins:
+          datasette-maplibre:
+            style: positron
+            color_column: continent
+      rivers:
+        description_html: |-
+          <p>The <code>course</code> column is a GeoJSON MultiLineString.</p>
+        source: Natural Earth
+        source_url: https://www.naturalearthdata.com/
+        plugins:
+          datasette-maplibre:
+            style: positron
+            color_column: kind
+      cities:
+        source: Natural Earth
+        source_url: https://www.naturalearthdata.com/
+        plugins:
+          datasette-maplibre:
+            view: points
+      capitals_and_countries:
+        description_html: |-
+          <p>A SQL view. Each row has a point, from the <code>latitude</code> and <code>longitude</code> of the capital,
+          and a shape, from the <code>boundary</code> of the country. Click either for the row.</p>
+        plugins:
+          datasette-maplibre:
+            view: points
+            style: positron
+            color_column: continent

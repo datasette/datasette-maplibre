@@ -279,6 +279,55 @@ def test_map_position_is_kept_in_the_url(ds_server, page, errors):
     assert page.evaluate("() => datasette.maplibre.map.getZoom()") == 5
 
 
+def test_toolbar_state_is_kept_in_the_url(ds_server, page, errors):
+    page.goto(ds_server + "/data/paginated")
+    overview = ready(page)
+    overview.locator("select[name=dmap-view]").select_option("heatmap")
+    overview.locator("select[name=dmap-color]").select_option("category")
+    overview.locator("select[name=dmap-style]").select_option("Other")
+    page.wait_for_url(re.compile("style=Other"))
+    for expected in ("view=heatmap", "color=category", "map="):
+        assert expected in page.url
+    # Going back to the configured defaults removes them again
+    overview.locator("select[name=dmap-view]").select_option("clusters")
+    overview.locator("select[name=dmap-color]").select_option("")
+    assert "view=" not in page.url
+    assert "color=" not in page.url
+
+
+def test_toolbar_state_can_be_set_by_a_link(ds_server, page, errors):
+    page.goto(
+        ds_server
+        + "/data/paginated#map=5/50/10&view=points&color=category&style=Other"
+    )
+    overview = ready(page)
+    expect(overview).to_have_attribute("data-view", "points")
+    expect(overview.locator("select[name=dmap-view]")).to_have_value("points")
+    expect(overview.locator("select[name=dmap-color]")).to_have_value("category")
+    expect(overview.locator("select[name=dmap-style]")).to_have_value("Other")
+    expect(overview.locator(".dmap-legend-item")).to_have_count(3)
+    page.wait_for_function(
+        "() => Boolean(datasette.maplibre.map.getLayer('background'))"
+    )
+    assert page.evaluate("() => datasette.maplibre.map.getZoom()") == 5
+    # Moving the map keeps the other parameters
+    page.evaluate("() => datasette.maplibre.map.jumpTo({zoom: 6})")
+    page.wait_for_url(re.compile("map=6/"))
+    assert "view=points" in page.url and "style=Other" in page.url
+
+
+def test_world_is_not_repeated_side_by_side(ds_server, page, errors):
+    page.set_viewport_size({"width": 1200, "height": 900})
+    page.goto(ds_server + "/data/two_points")
+    ready(page)
+    page.evaluate("() => datasette.maplibre.map.jumpTo({zoom: 0})")
+    zoom, width = page.evaluate(
+        "() => [datasette.maplibre.map.getZoom(), datasette.maplibre.map.getContainer().clientWidth]"
+    )
+    # MapLibre tiles are 512 pixels, so the world is 512 * 2 ** zoom wide
+    assert 512 * 2**zoom == pytest.approx(width)
+
+
 def test_geojson_cells(ds_server, page, errors):
     page.set_viewport_size({"width": 1200, "height": 900})
     page.goto(ds_server + "/data/shapes")
@@ -319,6 +368,8 @@ def test_points_and_shapes_on_one_map(ds_server, page, errors):
     overview = ready(page)
     expect(overview).to_have_attribute("data-points", "1")
     expect(overview).to_have_attribute("data-shapes", "1")
+    # One row with both a point and a shape is still one row
+    expect(overview.locator(".dmap-progress")).to_be_empty()
     click_feature(page, -121.95, 37.05)
     popup = overview.locator(".dmap-popup")
     expect(popup).to_contain_text("Popup title")

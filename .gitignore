@@ -9,3 +9,5 @@ venv
 .DS_Store
 .vscode
 uv.lock
+demo/cache/
+demo/demo.db

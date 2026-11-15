@@ -62,12 +62,13 @@ const CSS = `
 .dmap-ramp { display: inline-block; width: 10em; height: 0.8em; margin: 0 0.5em;
   vertical-align: -0.05em; border-radius: 2px; }
 .dmap-progress { font-size: 0.8rem; margin-top: 0.4em; min-height: 1.2em; }
-.dmap-popup { max-height: 240px; overflow: auto; font-size: 0.8rem; color: #222; }
+.dmap-popup { max-height: 260px; min-width: 200px; overflow: auto; font-size: 0.8rem; color: #222; }
 .dmap-popup dl { margin: 0; }
 .dmap-popup dt { font-weight: bold; }
 .dmap-popup dd { margin: 0 0 0.3em 0.7em; overflow-wrap: anywhere; }
 .dmap-popup dd span { color: #999; font-size: 0.85em; }
-.dmap-popup img { max-width: 100%; display: block; }
+.dmap-popup img { width: 100%; height: 150px; object-fit: cover; display: block;
+  margin-bottom: 0.4em; background: #eee; }
 .dmap-popup p { margin: 0 0 0.4em 0; }
 .dmap-popup a.dmap-popup-link { text-decoration: none; color: inherit; display: block; }
 .dmap-popup .dmap-popup-row { display: block; margin-top: 0.5em; }
@@ -145,6 +146,36 @@ function safeUrl(url) {
   } catch (e) {
     return null;
   }
+}
+
+/* ---------- Toolbar state in the URL hash, next to MapLibre's map= ---------- */
+
+function hashParts() {
+  return location.hash.replace(/^#/, "").split("&").filter(Boolean);
+}
+
+function getHashParam(key) {
+  const part = hashParts().find((item) => item.startsWith(key + "="));
+  if (!part) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(part.slice(key.length + 1));
+  } catch (e) {
+    return null;
+  }
+}
+
+function setHashParam(key, value) {
+  const parts = hashParts().filter((item) => !item.startsWith(key + "="));
+  if (value !== null && value !== "") {
+    parts.push(key + "=" + encodeURIComponent(value));
+  }
+  history.replaceState(
+    history.state,
+    "",
+    parts.length ? "#" + parts.join("&") : location.pathname + location.search
+  );
 }
 
 /* ---------- GeoJSON helpers ---------- */
@@ -226,12 +257,12 @@ function featureCollection(features) {
 
 function centerFeature(geometry, properties) {
   // A point in the middle of the geometry. z is the zoom level at which
-  // the geometry is about 24 pixels across, on 512 pixel tiles.
+  // the geometry is about 6 pixels across, on 512 pixel tiles.
   const [west, south, east, north] = extendBounds(null, geometry);
   const span = Math.max(east - west, north - south, 1e-6);
   return {
     type: "Feature",
-    properties: { ...properties, z: Math.log2((24 * 360) / (512 * span)) },
+    properties: { ...properties, z: Math.log2((6 * 360) / (512 * span)) },
     geometry: {
       type: "Point",
       coordinates: [(west + east) / 2, (south + north) / 2],
@@ -640,7 +671,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   const shapes = [];
   // A point for every shape, shown while the shape is too small to see
   const centers = [];
-  let shapeRows = 0;
+  let locatedRows = 0;
   let bounds = null;
   let library = null;
   let map = null;
@@ -649,8 +680,12 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   let lastFit = null;
   let keepGoing = false;
   let complete = false;
-  let view = config.view;
-  let styleLabel = config.style;
+  // view=, color= and style= in the URL hash override the configuration,
+  // so that a link can open the map in a particular state
+  let view = VIEWS[getHashParam("view")] ? getHashParam("view") : config.view;
+  let styleLabel = config.styles[getHashParam("style")]
+    ? getHashParam("style")
+    : config.style;
   let colorColumn = null;
   let scale = null;
   let columnsListed = false;
@@ -678,6 +713,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     Object.entries(VIEWS),
     (value) => {
       view = value;
+      setHashParam("view", value === config.view ? null : value);
       installLayers();
     }
   );
@@ -688,6 +724,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     Object.keys(config.styles).map((label) => [label, label]),
     (value) => {
       styleLabel = value;
+      setHashParam("style", value === config.style ? null : value);
       styleReady = false;
       map.setStyle(resolveStyle(value), { diff: false });
     }
@@ -753,7 +790,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
             onclick: () => {
               areaParams.forEach((param) => current.searchParams.delete(param));
               current.searchParams.delete("_next");
-              current.hash = "";
+              // Keep the view, colour and style, but not the map position
+              setHashParam("map", null);
+              current.hash = location.hash;
               location.href = current.href;
             },
           },
@@ -821,6 +860,11 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       mapEl.textContent = "Could not display the map: " + error;
       return;
     }
+    // Never zoom out so far that the world is repeated side by side
+    const setMinZoom = () =>
+      map.setMinZoom(Math.max(0, Math.log2(mapEl.clientWidth / 512)));
+    setMinZoom();
+    map.on("resize", setMinZoom);
     map.addControl(new library.NavigationControl({ visualizePitch: true }));
     map.addControl(new library.GlobeControl());
     map.addControl(new library.FullscreenControl());
@@ -857,10 +901,40 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   }
 
   function heatmapIntensity() {
-    // The more points there are, the less each one contributes - otherwise
-    // a few hundred points are enough to turn the whole heatmap solid red
-    const k = Math.min(1, 40 / Math.max(points.length, 1));
-    return ["interpolate", ["linear"], ["zoom"], 0, k, 15, k * 6];
+    // MapLibre heatmaps are not normalised, so a fixed intensity is either
+    // invisible for sparse data or solid red for dense data. Count the points
+    // in each cell of a grid over the data, then pick the intensity that makes
+    // the busiest cell hot at the zoom level the data was fitted to.
+    const COLUMNS = 32;
+    const ROWS = 16;
+    let busiest = 1;
+    if (bounds) {
+      const [west, south, east, north] = bounds;
+      const width = east - west || 1;
+      const height = north - south || 1;
+      const cells = new Map();
+      points.forEach((feature) => {
+        const [lng, lat] = feature.geometry.coordinates;
+        const key =
+          Math.min(COLUMNS - 1, Math.floor(((lng - west) / width) * COLUMNS)) +
+          COLUMNS * Math.min(ROWS - 1, Math.floor(((lat - south) / height) * ROWS));
+        const count = (cells.get(key) || 0) + 1;
+        cells.set(key, count);
+        busiest = Math.max(busiest, count);
+      });
+    }
+    const base = Math.max(0.03, Math.min(1, 3 / busiest));
+    const zoom = Math.max(0, lastFit ? lastFit[2] : map.getZoom());
+    // Points spread out as the map zooms in, so turn the intensity up
+    return [
+      "interpolate",
+      ["exponential", 1.5],
+      ["zoom"],
+      zoom,
+      base,
+      zoom + 8,
+      base * 25,
+    ];
   }
 
   function installLayers() {
@@ -901,10 +975,10 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       filter: [">", ["get", "z"], ["zoom"]],
       paint: {
         "circle-color": color,
-        "circle-radius": 6,
-        "circle-opacity": 0.6,
+        "circle-radius": 5,
+        "circle-opacity": 0.5,
         "circle-stroke-color": color,
-        "circle-stroke-width": 2,
+        "circle-stroke-width": 1.5,
       },
     });
     layerIds.push("dmap-center");
@@ -921,7 +995,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         source: POINTS_SOURCE,
         maxzoom: 15,
         paint: {
-          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 6, 9, 24, 15, 40],
+          "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 16, 9, 26, 15, 40],
           "heatmap-intensity": heatmapIntensity(),
           "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 12, 0.7, 15, 0],
         },
@@ -1036,6 +1110,11 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     }
     if (map && bounds && !hadHash && !movedSinceFit()) {
       map.fitBounds(mapBounds(bounds), { padding: 50, maxZoom: 14, animate: false });
+      if (map.getZoom() <= map.getMinZoom() + 1e-6 && bounds[1] < 20 && bounds[3] > 20) {
+        // The data is taller than the map can show. Centre on the latitude
+        // that shows the most land, not on a lot of Southern Ocean.
+        map.jumpTo({ center: [map.getCenter().lng, 20] });
+      }
       lastFit = camera();
     }
     updateStatus();
@@ -1071,17 +1150,15 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         ],
       });
     }
-    let hasShape = false;
     Object.values(row).forEach((value) => {
       toGeometries(parseGeoJSON(value)).forEach((geometry) => {
         if (extendBounds(null, geometry)) {
           add(geometry);
-          hasShape = true;
         }
       });
     });
-    if (hasShape) {
-      shapeRows += 1;
+    if (located) {
+      locatedRows += 1;
     }
     return located;
   }
@@ -1221,7 +1298,10 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         colorSelect.appendChild(h("option", { value: column }, column));
       }
     });
-    const wanted = (config.colorColumn || "").toLowerCase();
+    const fromHash = getHashParam("color");
+    const wanted = (
+      fromHash === null ? config.colorColumn || "" : fromHash
+    ).toLowerCase();
     const match = Object.keys(rows[0]).find((c) => c.toLowerCase() === wanted);
     if (wanted && match) {
       colorSelect.value = match;
@@ -1231,6 +1311,11 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
 
   function setColorColumn(column) {
     colorColumn = column;
+    const configured = (config.colorColumn || "").toLowerCase();
+    setHashParam(
+      "color",
+      (column || "").toLowerCase() === configured ? null : column || "none"
+    );
     applyColor();
     installLayers();
   }
@@ -1316,7 +1401,6 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
           ofTotal = ` of ${total.toLocaleString()}`;
           percent = ` (${Math.round((rows.length / total) * 10000) / 100}%)`;
         }
-        const mapped = points.length + shapeRows;
         if (nextUrl) {
           addToPage();
           progressEl.textContent = map
@@ -1346,9 +1430,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
           }
         } else if (map) {
           progressEl.textContent =
-            mapped === rows.length
+            locatedRows === rows.length
               ? ""
-              : `${mapped.toLocaleString()} of ${rows.length.toLocaleString()} rows have a location`;
+              : `${locatedRows.toLocaleString()} of ${rows.length.toLocaleString()} rows have a location`;
         } else {
           // Every row has been fetched and none of them had a location
           wrapper.remove();

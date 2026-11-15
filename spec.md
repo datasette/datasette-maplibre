@@ -47,6 +47,11 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [x] Scrolling the page does not zoom the map unless `scroll_zoom` is set
 - [x] Loading more rows never moves a map that has already been moved
 - [x] Heatmap intensity scales with the number of points
+- [x] View, colour and style are kept in the URL hash and can be set by a link
+- [x] Heatmap intensity is normalised by the density of the points
+- [x] The map never zooms out far enough to repeat the world
+- [x] Popup images have a fixed height, so popups are positioned correctly before the image loads
+- [x] Demo instance in `demo/` with a guided tour of every feature
 
 ## Ideas not built
 
