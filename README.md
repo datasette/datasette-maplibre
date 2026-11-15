@@ -6,7 +6,7 @@ It combines the features of [datasette-cluster-map](https://github.com/simonw/da
 
 ## Demo
 
-The `demo/` directory has a demo instance with a guided tour of every feature on its home page: 20 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
+The `demo/` directory has a demo instance with a guided tour of every feature on its home page: 19 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
 
     uv run python demo/build.py
     uv run datasette demo/demo.db -m demo/metadata.yml --setting max_returned_rows 5000
@@ -44,19 +44,19 @@ The toolbar above the map offers:
 
 - **View** - clusters, individual points or a heatmap
 - **Colour by** - colour the points and shapes by any column. Columns with up to ten distinct values get a legend with counts, numeric columns with more get a colour ramp.
-- **Style** - switch between the OpenFreeMap Liberty, Bright, Positron, Dark and Fiord styles, plus any you configure
-- **3D** - tilt the map. Zoom in to a city with the Liberty style to see the buildings.
+- **Globe** - switch between a globe and a flat map
 - **Filter to this area** - on table pages, reloads the table with filters such as `?latitude__gte=...` so that it only contains rows inside the area the map is showing. "Clear area filter" removes them.
 - **Download GeoJSON** - everything loaded onto the map so far, as a GeoJSON file with the other columns as properties
 
-The map also has zoom, compass, globe and fullscreen controls.
+The map also has zoom, compass and fullscreen controls. To tilt it into 3D, drag with the right mouse button or with ctrl held down: zoom in to a city to see the buildings.
 
 Other things to know:
 
 - Clicking a point or shape shows a popup with the row, and highlights that row in the table if it is on the current page.
 - Hovering over a table row highlights its point or shape on the map.
+- The map shows every row, where the table shows one page of them. When the map has more, the line under it says "All 171 rows are on the map".
 - Shapes that are too small to see at the current zoom level are marked with a circle.
-- The position of the map is kept in the URL, as `#map=zoom/latitude/longitude`, so a link to the page is a link to that view of the map. So are the view, colour and style when they differ from the configured ones: `#view=heatmap&color=fuel&style=Dark`. These can be used in links you write yourself.
+- The position of the map is kept in the URL, as `#map=zoom/latitude/longitude`, so a link to the page is a link to that view of the map. So are the view, colour and globe when they differ from the configured ones: `#view=heatmap&color=fuel&globe=1`. These can be used in links you write yourself.
 - The map never zooms out so far that the world is repeated side by side.
 - Scrolling the page does not zoom the map. Use ctrl + scroll (⌘ + scroll on macOS), or the zoom buttons.
 
@@ -92,10 +92,7 @@ All of these are optional. They can be set for the whole instance, for a databas
         "datasette-maplibre": {
             "latitude_column": "xlat",
             "longitude_column": "xlng",
-            "style": "positron",
-            "styles": {
-                "My style": "https://example.com/style.json"
-            },
+            "style": "https://example.com/style.json",
             "view": "points",
             "color_column": "category",
             "height": "70vh",
@@ -109,8 +106,7 @@ All of these are optional. They can be set for the whole instance, for a databas
 ```
 
 - `latitude_column` and `longitude_column` - the columns to use, if they do not match the patterns above
-- `style` - the style to start with. One of `liberty` (the default), `bright`, `positron`, `dark` or `fiord`, the name of one of your `styles`, the URL of a [MapLibre style](https://maplibre.org/maplibre-style-spec/) or a complete style as a JSON object.
-- `styles` - extra styles for the style menu, as `{"name": URL or style object}`
+- `style` - the URL of a [MapLibre style](https://maplibre.org/maplibre-style-spec/), or a complete style as a JSON object. Defaults to the OpenFreeMap Liberty style, `https://tiles.openfreemap.org/styles/liberty`.
 - `view` - `clusters` (the default), `points` or `heatmap`
 - `color_column` - a column to colour by to begin with
 - `height` - CSS height of the overview map, default `500px`

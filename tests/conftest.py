@@ -8,14 +8,6 @@ import sys
 
 # An empty style, so that the tests never need to fetch tiles
 EMPTY_STYLE = {"version": 8, "sources": {}, "layers": []}
-OTHER_STYLE = {
-    "version": 8,
-    "sources": {},
-    "layers": [
-        {"id": "background", "type": "background", "paint": {"background-color": "#dde"}}
-    ],
-}
-
 
 def pytest_report_header():
     return "Datasette: {}".format(datasette.__version__)
@@ -80,6 +72,21 @@ def ds_db_path(tmp_path_factory):
             "insert into shapes (name, geometry) values (?, ?)",
             [("Square {}".format(i), square(-122 + i, 37)) for i in range(6)],
         )
+        # More than 400 characters of GeoJSON
+        db.execute("create table long_shape (id integer primary key, geometry text)")
+        db.execute(
+            "insert into long_shape (geometry) values (?)",
+            (
+                json.dumps(
+                    {
+                        "type": "LineString",
+                        "coordinates": [
+                            [-122 + i * 0.001, 37 + (i % 7) * 0.001] for i in range(100)
+                        ],
+                    }
+                ),
+            ),
+        )
         db.execute(
             "create table mixed (id integer primary key, name text, latitude float, "
             "longitude float, boundary text, popup text)"
@@ -113,7 +120,6 @@ def ds_server(ds_db_path, tmp_path_factory):
                 "plugins": {
                     "datasette-maplibre": {
                         "style": EMPTY_STYLE,
-                        "styles": {"Other": OTHER_STYLE},
                         "max_cell_maps": 2,
                     }
                 },

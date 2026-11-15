@@ -100,9 +100,8 @@ async def test_default_config_on_table_page():
     config = config_from_html(response.text)
     assert config["latitudeColumn"] == "latitude"
     assert config["longitudeColumn"] == "longitude"
-    assert config["style"] == "Liberty"
-    assert list(config["styles"]) == ["Liberty", "Bright", "Positron", "Dark", "Fiord"]
-    assert config["styles"]["Liberty"] == "https://tiles.openfreemap.org/styles/liberty"
+    assert config["style"] == "https://tiles.openfreemap.org/styles/liberty"
+    assert "styles" not in config
     assert config["view"] == "clusters"
     assert config["height"] == "500px"
     assert config["maxCellMaps"] == 8
@@ -161,7 +160,7 @@ async def test_configured_columns():
 @pytest.mark.asyncio
 async def test_table_level_configuration():
     ds = await make_datasette(
-        {"view": "points", "style": "dark"},
+        {"view": "points", "style": "https://example.com/style.json"},
         {
             "view": "heatmap",
             "color_column": "name",
@@ -172,7 +171,7 @@ async def test_table_level_configuration():
     config = config_from_html((await ds.client.get("/data/places")).text)
     assert config["view"] == "heatmap"
     # Settings the table does not override are inherited
-    assert config["style"] == "Dark"
+    assert config["style"] == "https://example.com/style.json"
     assert config["colorColumn"] == "name"
     assert config["height"] == "300px"
     assert config["scrollZoom"] is True
@@ -182,38 +181,16 @@ async def test_table_level_configuration():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "plugin_config,expected_style,expected_styles",
+    "style",
     (
-        # Built-in styles are matched case-insensitively
-        ({"style": "dark"}, "Dark", {}),
-        # A URL becomes the default, labelled "Custom"
-        (
-            {"style": "https://example.com/style.json"},
-            "Custom",
-            {"Custom": "https://example.com/style.json"},
-        ),
-        # So does an inline style object
-        (
-            {"style": {"version": 8, "sources": {}, "layers": []}},
-            "Custom",
-            {"Custom": {"version": 8, "sources": {}, "layers": []}},
-        ),
-        # Extra named styles are added to the switcher
-        (
-            {"style": "Topo", "styles": {"Topo": "https://example.com/topo.json"}},
-            "Topo",
-            {"Topo": "https://example.com/topo.json"},
-        ),
-        ({"styles": {"Topo": "https://example.com/topo.json"}}, "Liberty", {}),
+        "https://example.com/style.json",
+        {"version": 8, "sources": {}, "layers": []},
     ),
 )
-async def test_style_configuration(plugin_config, expected_style, expected_styles):
-    ds = await make_datasette(plugin_config)
+async def test_style_configuration(style):
+    ds = await make_datasette({"style": style})
     config = config_from_html((await ds.client.get("/data/places")).text)
-    assert config["style"] == expected_style
-    assert "Liberty" in config["styles"]
-    for key, value in expected_styles.items():
-        assert config["styles"][key] == value
+    assert config["style"] == style
 
 
 @pytest.mark.asyncio

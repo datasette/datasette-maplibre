@@ -64,7 +64,7 @@ def test_load_all_paginates_through_table(ds_server, page, errors):
     expect(progress).to_contain_text("Showing 10 of 25 (40%)")
     progress.get_by_role("button", name="load all").click()
     expect(overview).to_have_attribute("data-points", "25")
-    expect(progress).to_be_empty()
+    expect(progress).to_have_text("All 25 rows are on the map")
     assert [response.status for response in responses] == [200, 200, 200]
 
 
@@ -144,17 +144,31 @@ def test_view_is_configurable(ds_server, page, errors):
     ) in (False, None)
 
 
-def test_style_can_be_switched(ds_server, page, errors):
+def test_globe_button(ds_server, page, errors):
     page.goto(ds_server + "/data/two_points")
     overview = ready(page)
-    select = overview.locator("select[name=dmap-style]")
-    expect(select).to_have_value("Custom")
-    select.select_option("Other")
+    projection = "() => datasette.maplibre.map.getProjection().type"
+    button = overview.get_by_role("button", name="Globe")
+    expect(button).to_have_attribute("aria-pressed", "false")
+    # There is no 3D button, style menu, or globe control on the map itself
+    expect(overview.locator(".dmap-tilt, select[name=dmap-style]")).to_have_count(0)
+    expect(overview.locator(".maplibregl-ctrl-globe")).to_have_count(0)
+    button.click()
+    expect(button).to_have_attribute("aria-pressed", "true")
+    assert page.evaluate(projection) == "globe"
+    assert "globe=1" in page.url
+    button.click()
+    assert page.evaluate(projection) == "mercator"
+    assert "globe=" not in page.url
+
+
+def test_globe_can_be_set_by_a_link(ds_server, page, errors):
+    page.goto(ds_server + "/data/two_points#globe=1")
+    overview = ready(page)
+    expect(overview).to_have_attribute("data-globe", "true")
     page.wait_for_function(
-        "() => Boolean(datasette.maplibre.map.getLayer('background'))"
-        " && Boolean(datasette.maplibre.map.getLayer('dmap-point'))"
+        "() => datasette.maplibre.map.getProjection().type === 'globe'"
     )
-    expect(overview).to_have_attribute("data-points", "2")
 
 
 def test_color_by_category(ds_server, page, errors):
@@ -284,9 +298,8 @@ def test_toolbar_state_is_kept_in_the_url(ds_server, page, errors):
     overview = ready(page)
     overview.locator("select[name=dmap-view]").select_option("heatmap")
     overview.locator("select[name=dmap-color]").select_option("category")
-    overview.locator("select[name=dmap-style]").select_option("Other")
-    page.wait_for_url(re.compile("style=Other"))
-    for expected in ("view=heatmap", "color=category", "map="):
+    page.wait_for_url(re.compile("color=category"))
+    for expected in ("view=heatmap", "map="):
         assert expected in page.url
     # Going back to the configured defaults removes them again
     overview.locator("select[name=dmap-view]").select_option("clusters")
@@ -298,22 +311,18 @@ def test_toolbar_state_is_kept_in_the_url(ds_server, page, errors):
 def test_toolbar_state_can_be_set_by_a_link(ds_server, page, errors):
     page.goto(
         ds_server
-        + "/data/paginated#map=5/50/10&view=points&color=category&style=Other"
+        + "/data/paginated#map=5/50/10&view=points&color=category"
     )
     overview = ready(page)
     expect(overview).to_have_attribute("data-view", "points")
     expect(overview.locator("select[name=dmap-view]")).to_have_value("points")
     expect(overview.locator("select[name=dmap-color]")).to_have_value("category")
-    expect(overview.locator("select[name=dmap-style]")).to_have_value("Other")
     expect(overview.locator(".dmap-legend-item")).to_have_count(3)
-    page.wait_for_function(
-        "() => Boolean(datasette.maplibre.map.getLayer('background'))"
-    )
     assert page.evaluate("() => datasette.maplibre.map.getZoom()") == 5
     # Moving the map keeps the other parameters
     page.evaluate("() => datasette.maplibre.map.jumpTo({zoom: 6})")
     page.wait_for_url(re.compile("map=6/"))
-    assert "view=points" in page.url and "style=Other" in page.url
+    assert "view=points" in page.url and "color=category" in page.url
 
 
 def test_world_is_not_repeated_side_by_side(ds_server, page, errors):
@@ -326,6 +335,17 @@ def test_world_is_not_repeated_side_by_side(ds_server, page, errors):
     )
     # MapLibre tiles are 512 pixels, so the world is 512 * 2 ** zoom wide
     assert 512 * 2**zoom == pytest.approx(width)
+
+
+def test_says_when_the_map_has_more_rows_than_the_table(ds_server, page, errors):
+    # The map loads every row, the table only shows a page of them
+    page.goto(ds_server + "/data/shapes?_size=3")
+    overview = ready(page)
+    expect(page.locator("table.rows-and-columns tbody tr")).to_have_count(3)
+    expect(overview).to_have_attribute("data-shapes", "6")
+    expect(overview.locator(".dmap-progress")).to_have_text(
+        "All 6 rows are on the map"
+    )
 
 
 def test_geojson_cells(ds_server, page, errors):
@@ -361,6 +381,30 @@ def test_single_geojson_cell_has_no_overview_map(ds_server, page, errors):
     page.goto(ds_server + "/data/shapes/1")
     expect(page.locator(".dmap-cell[data-live=true]")).to_have_count(1)
     expect(page.locator(".dmap")).to_have_count(0)
+
+
+def test_long_geojson_on_a_row_page_is_not_collapsed(ds_server, page, errors):
+    # Datasette 1.0 hides most of a long value behind "Show all N characters"
+    page.goto(ds_server + "/data/long_shape/1")
+    cell = page.locator(".dmap-cell")
+    expect(cell).to_have_attribute("data-live", "true")
+    expect(page.locator(".row-field-expand")).to_have_count(0)
+    box = cell.bounding_box()
+    assert box["height"] == 280
+    # Nothing is clipping it
+    visible = cell.evaluate(
+        """el => {
+            let top = el.getBoundingClientRect().top, bottom = el.getBoundingClientRect().bottom;
+            for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                if (getComputedStyle(p).overflowY !== 'visible') {
+                    top = Math.max(top, p.getBoundingClientRect().top);
+                    bottom = Math.min(bottom, p.getBoundingClientRect().bottom);
+                }
+            }
+            return bottom - top;
+        }"""
+    )
+    assert visible == 280
 
 
 def test_points_and_shapes_on_one_map(ds_server, page, errors):

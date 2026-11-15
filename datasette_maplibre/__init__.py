@@ -4,11 +4,7 @@ import json
 
 PLUGIN_NAME = "datasette-maplibre"
 
-OPENFREEMAP_STYLES = {
-    name.title(): "https://tiles.openfreemap.org/styles/{}".format(name)
-    for name in ("liberty", "bright", "positron", "dark", "fiord")
-}
-DEFAULT_STYLE = "Liberty"
+DEFAULT_STYLE = "https://tiles.openfreemap.org/styles/liberty"
 VIEWS = ("clusters", "points", "heatmap")
 
 GEOJSON_TYPES = {
@@ -72,15 +68,14 @@ def extra_body_script(database, table, columns, datasette):
         return ""
     config = plugin_config(datasette, database, table)
     latitude_column, longitude_column = find_columns(columns, config) or (None, None)
-    styles, style = resolve_styles(config)
     view = config.get("view")
     js_config = {
         "maplibreUrl": datasette.urls.static_plugins(PLUGIN_NAME, "maplibre-gl.mjs"),
         "cssUrl": datasette.urls.static_plugins(PLUGIN_NAME, "maplibre-gl.css"),
         "latitudeColumn": latitude_column,
         "longitudeColumn": longitude_column,
-        "styles": styles,
-        "style": style,
+        # The URL of a MapLibre style, or a style object
+        "style": config.get("style") or DEFAULT_STYLE,
         "view": view if view in VIEWS else VIEWS[0],
         "height": config.get("height") or "500px",
         "container": config.get("container"),
@@ -119,19 +114,6 @@ def plugin_config(datasette, database=None, table=None):
     for level in levels:
         config.update(datasette.plugin_config(PLUGIN_NAME, **level) or {})
     return config
-
-
-def resolve_styles(config):
-    "Returns ({label: style URL or style object}, label of the default style)"
-    styles = dict(OPENFREEMAP_STYLES)
-    styles.update(config.get("styles") or {})
-    style = config.get("style") or DEFAULT_STYLE
-    if isinstance(style, str):
-        for label in styles:
-            if label.lower() == style.lower():
-                return styles, label
-    styles["Custom"] = style
-    return styles, "Custom"
 
 
 def find_columns(columns, config):

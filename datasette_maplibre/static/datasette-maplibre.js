@@ -46,7 +46,13 @@ const CSS = `
 .dmap-toolbar { display: flex; flex-wrap: wrap; gap: 0.4em 1em; align-items: center;
   font-size: 0.8rem; margin-bottom: 0.4em; }
 .dmap-toolbar label { display: inline-flex; align-items: center; gap: 0.3em; }
-.dmap-toolbar select { font-size: 0.8rem; max-width: 12em; }
+.dmap-toolbar select { font-size: 0.8rem; max-width: 14em; color: #222;
+  padding: 0.35em 2em 0.35em 0.7em; border: 1px solid #bbb; border-radius: 0.25rem;
+  line-height: 1.2; appearance: none; -webkit-appearance: none; cursor: pointer;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23555' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 0.7em center; }
+.dmap-toolbar select:hover { border-color: #888; }
+.dmap-toolbar button.dmap-globe { display: inline-flex; align-items: center; padding: 0.3em 0.5em; }
+.dmap-toolbar button.dmap-globe svg { width: 1.25em; height: 1.25em; display: block; }
 .dmap-toolbar .dmap-spacer { flex: 1; }
 .dmap-toolbar button, .dmap-progress button { color: #fff; background-color: #007bff; border: 1px solid #0062cc;
   cursor: pointer; padding: 0.3em 0.7em; font-size: 0.75rem; line-height: 1.2;
@@ -389,10 +395,6 @@ function addShapeLayers(map, source, prefix, color) {
   return ["-fill", "-line", "-circle"].map((suffix) => prefix + suffix);
 }
 
-function resolveStyle(label) {
-  return config.styles[label] || config.styles[config.style];
-}
-
 /* ---------- GeoJSON cells ---------- */
 
 function findGeoJSONCells() {
@@ -452,7 +454,7 @@ function setUpCells(cells) {
       try {
         const map = new library.Map({
           container: cell.mapEl,
-          style: resolveStyle(config.style),
+          style: config.style,
           bounds: mapBounds(cell.bounds),
           fitBoundsOptions: { padding: 30, maxZoom: 14 },
           // Scrolling the page should not zoom every map the mouse passes over
@@ -514,6 +516,15 @@ function setUpCells(cells) {
     cell.el = h("div", { class: "dmap-cell", "data-live": "false" });
     cell.el.appendChild(cell.svg);
     cell.td.replaceChildren(cell.el);
+    // Datasette 1.0 row pages collapse long values behind a "Show all 2,099
+    // characters" button. A map is not long, so undo that.
+    const collapsed = cell.td.closest(".row-field-long");
+    if (collapsed) {
+      collapsed.classList.add("is-expanded");
+      collapsed
+        .querySelectorAll(".row-field-expand")
+        .forEach((button) => button.remove());
+    }
     byElement.set(cell.el, cell);
     observer.observe(cell.el);
   });
@@ -680,12 +691,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   let lastFit = null;
   let keepGoing = false;
   let complete = false;
-  // view=, color= and style= in the URL hash override the configuration,
+  // view=, color= and globe= in the URL hash override the configuration,
   // so that a link can open the map in a particular state
   let view = VIEWS[getHashParam("view")] ? getHashParam("view") : config.view;
-  let styleLabel = config.styles[getHashParam("style")]
-    ? getHashParam("style")
-    : config.style;
   let colorColumn = null;
   let scale = null;
   let columnsListed = false;
@@ -718,43 +726,35 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     }
   );
   viewSelect.value = view;
-  const [styleLabelEl, styleSelect] = select(
-    "Style",
-    "dmap-style",
-    Object.keys(config.styles).map((label) => [label, label]),
-    (value) => {
-      styleLabel = value;
-      setHashParam("style", value === config.style ? null : value);
-      styleReady = false;
-      map.setStyle(resolveStyle(value), { diff: false });
-    }
-  );
-  styleSelect.value = styleLabel;
   const [colorLabel, colorSelect] = select(
     "Colour by",
     "dmap-color",
     [["", "(none)"]],
     (value) => setColorColumn(value || null)
   );
-  const tiltButton = h(
-    "button",
-    {
-      type: "button",
-      class: "dmap-secondary dmap-tilt",
-      "aria-pressed": "false",
-      onclick: () => {
-        const tilted = map.getPitch() > 0;
-        map.easeTo({ pitch: tilted ? 0 : 55 });
-        tiltButton.setAttribute("aria-pressed", String(!tilted));
-      },
+  // Globe or flat map. Tilting is still there: drag with the right mouse
+  // button, or with ctrl held down.
+  let globe = getHashParam("globe") === "1";
+  const globeButton = h("button", {
+    type: "button",
+    class: "dmap-secondary dmap-globe",
+    title: "Show the map as a globe",
+    "aria-label": "Globe",
+    "aria-pressed": String(globe),
+    onclick: () => {
+      globe = !globe;
+      setHashParam("globe", globe ? "1" : null);
+      applyProjection();
     },
-    "3D"
-  );
+  });
+  globeButton.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+    'stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/>' +
+    '<ellipse cx="12" cy="12" rx="4" ry="9.5"/><path d="M2.5 12h19M4.5 7h15M4.5 17h15"/></svg>';
   const toolbar = h("div", { class: "dmap-toolbar" }, [
     viewLabel,
     colorLabel,
-    styleLabelEl,
-    tiltButton,
+    globeButton,
     h("span", { class: "dmap-spacer" }),
   ]);
   const canFilter = pageType === "table" && latitudeColumn && longitudeColumn;
@@ -847,7 +847,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     try {
       map = new library.Map({
         container: mapEl,
-        style: resolveStyle(styleLabel),
+        style: config.style,
         center: [0, 20],
         zoom: 1,
         // Keeps the position of the map in the URL, as #map=zoom/lat/lng
@@ -860,17 +860,14 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       mapEl.textContent = "Could not display the map: " + error;
       return;
     }
-    // Never zoom out so far that the world is repeated side by side
-    const setMinZoom = () =>
-      map.setMinZoom(Math.max(0, Math.log2(mapEl.clientWidth / 512)));
     setMinZoom();
     map.on("resize", setMinZoom);
     map.addControl(new library.NavigationControl({ visualizePitch: true }));
-    map.addControl(new library.GlobeControl());
     map.addControl(new library.FullscreenControl());
     map.addControl(new library.ScaleControl(), "bottom-left");
     map.on("style.load", () => {
       styleReady = true;
+      applyProjection();
       installLayers();
     });
     map.on("click", onClick);
@@ -883,6 +880,20 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     });
     // For debugging, and for other plugins
     config.map = map;
+  }
+
+  function setMinZoom() {
+    // Never zoom out so far that the flat world is repeated side by side
+    map.setMinZoom(globe ? 0 : Math.max(0, Math.log2(mapEl.clientWidth / 512)));
+  }
+
+  function applyProjection() {
+    globeButton.setAttribute("aria-pressed", String(globe));
+    wrapper.dataset.globe = String(globe);
+    if (map && styleReady) {
+      map.setProjection({ type: globe ? "globe" : "mercator" });
+      setMinZoom();
+    }
   }
 
   function fontForLabels() {
@@ -1429,10 +1440,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
             return loadRows(nextUrl);
           }
         } else if (map) {
-          progressEl.textContent =
-            locatedRows === rows.length
-              ? ""
-              : `${locatedRows.toLocaleString()} of ${rows.length.toLocaleString()} rows have a location`;
+          showSummary();
         } else {
           // Every row has been fetched and none of them had a location
           wrapper.remove();
@@ -1444,6 +1452,19 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
           progressEl.textContent = "Could not load rows for the map: " + error.message;
         }
       });
+  }
+
+  function showSummary() {
+    // Every row has loaded. The table only shows a page of rows, so say
+    // when the map has more than that.
+    const count = (n) => n.toLocaleString();
+    if (locatedRows !== rows.length) {
+      progressEl.textContent = `${count(locatedRows)} of ${count(rows.length)} rows have a location`;
+    } else if (pageType === "table" && domRows.length < rows.length) {
+      progressEl.textContent = `All ${count(rows.length)} rows are on the map`;
+    } else {
+      progressEl.textContent = "";
+    }
   }
 
   let path = location.pathname + ".json";

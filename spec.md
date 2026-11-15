@@ -21,11 +21,11 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [x] No map until a row with a location has loaded
 - [x] Popups: `popup` column JSON (title/image/alt/description/link) or the full row
 - [x] View modes: clusters, individual points, heatmap
-- [x] Style switcher across the OpenFreeMap styles plus any configured ones
+- [x] ~~Style switcher~~ (removed)
 - [x] Colour by column: categorical legend or numeric ramp
 - [x] "Filter to this area": turn the visible map bounds into table filters
 - [x] Table <-> map linking: hover a table row to highlight it on the map, click a feature to highlight its table row
-- [x] 3D tilt, globe, fullscreen, scale controls
+- [x] Globe, fullscreen, scale controls
 - [x] Map position kept in the URL hash
 - [x] Download what is on the map as GeoJSON
 
@@ -52,6 +52,10 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [x] The map never zooms out far enough to repeat the world
 - [x] Popup images have a fixed height, so popups are positioned correctly before the image loads
 - [x] Demo instance in `demo/` with a guided tour of every feature
+- [x] "All N rows are on the map" line when the map has more rows than the page of the table
+- [x] Globe toggle in the toolbar, replacing the 3D button and the globe control on the map
+- [x] Style menu removed: `style` is now just a URL or style object, default Liberty
+- [x] GeoJSON maps on Datasette 1.0 row pages are not collapsed behind "Show all N characters"
 
 ## Ideas not built
 

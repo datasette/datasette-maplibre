@@ -32,18 +32,16 @@ description_html: |-
 
   <h3 style="margin-top: 1em">The map itself</h3>
   <ol start="9" style="list-style: decimal; padding-left: 2em">
-    <li><a href="demo/landmarks#map=16.3/40.7478/-73.9853/-25/60&amp;style=Liberty"><strong>3D</strong></a> -
-      the Empire State Building, tilted. The <em>3D</em> button toggles the tilt; right-drag (or ctrl-drag) to rotate.</li>
-    <li><a href="demo/earthquakes#map=1.6/15/-150&amp;view=points&amp;color=magnitude"><strong>Globe</strong></a> -
-      press the globe button, top right of the map, then drag the world around.</li>
-    <li><a href="demo/power_plants?country=Italy#view=points&amp;color=fuel&amp;style=Dark"><strong>Styles</strong></a> -
-      the <em>Style</em> menu switches between the five OpenFreeMap styles. This link starts in Dark.</li>
-    <li><a href="demo/landmarks#map=12.5/41.8902/12.4922&amp;style=Positron"><strong>Links remember everything</strong></a> -
-      map position, view, colour and style are all kept in the URL, so any view can be bookmarked or shared.</li>
+    <li><a href="demo/landmarks#map=16.3/40.7478/-73.9853/-25/60"><strong>3D</strong></a> -
+      the Empire State Building, tilted. Drag with the right mouse button, or with ctrl held down, to tilt and rotate.</li>
+    <li><a href="demo/earthquakes#map=1.6/15/-150&amp;view=points&amp;color=magnitude&amp;globe=1"><strong>Globe</strong></a> -
+      a month of earthquakes around the Pacific. The globe button above the map switches between globe and flat map.</li>
+    <li><a href="demo/power_plants?country=Italy#map=9.5/45.5/9.2&amp;view=points&amp;color=fuel"><strong>Links remember everything</strong></a> -
+      map position, view, colour and globe are all kept in the URL, so any view can be bookmarked or shared.</li>
   </ol>
 
   <h3 style="margin-top: 1em">GeoJSON</h3>
-  <ol start="13" style="list-style: decimal; padding-left: 2em">
+  <ol start="12" style="list-style: decimal; padding-left: 2em">
     <li><a href="demo/countries"><strong>A map in every GeoJSON cell</strong></a> -
       scroll down the table. Each boundary is an instant SVG outline that becomes a live map
       as it scrolls into view, so 177 maps on one page is not a problem.</li>
@@ -54,11 +52,12 @@ description_html: |-
       Luxembourg is a dot at this zoom level. Zoom in and the dot is replaced by its outline.</li>
     <li><a href="demo/rivers"><strong>Lines</strong></a> - rivers and lake centre lines.</li>
     <li><a href="demo/capitals_and_countries"><strong>Points and shapes together</strong></a> -
-      a SQL view with latitude and longitude columns for each capital and a GeoJSON column for its country.</li>
+      a SQL view with latitude and longitude columns for each capital and a GeoJSON column for its country.
+      The table shows 100 rows at a time; the map has all 171.</li>
   </ol>
 
   <h3 style="margin-top: 1em">Everywhere else</h3>
-  <ol start="18" style="list-style: decimal; padding-left: 2em">
+  <ol start="17" style="list-style: decimal; padding-left: 2em">
     <li><a href="demo/landmarks/4"><strong>Row pages</strong></a> get a map too:
       here is the Golden Gate Bridge, and here is <a href="demo/countries/142">a single country</a>.</li>
     <li><a href="demo?sql=select+name%2C+population%2C+latitude%2C+longitude+from+cities+where+population+%3E+5000000+order+by+population+desc#view=points&amp;color=population"><strong>Any SQL query</strong></a>
@@ -106,7 +105,7 @@ databases:
         - fuel
       earthquakes:
         description_html: |-
-          <p>Magnitude 4.5 and above, last 30 days. This table is configured to open as a heatmap on the Dark style.
+          <p>Magnitude 4.5 and above, last 30 days. This table is configured to open as a heatmap.
           Zoom in and the heatmap fades into points. Try <em>View</em>: Points with <em>Colour by</em>: magnitude.</p>
         source: USGS Earthquake Hazards Program
         source_url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php
@@ -114,16 +113,14 @@ databases:
         plugins:
           datasette-maplibre:
             view: heatmap
-            style: dark
       landmarks:
         description_html: |-
           <p>Click a landmark for a popup with a photograph. The popup comes from the JSON in the <code>popup</code> column.
-          Zoom right in to one and press <em>3D</em>.</p>
+          Zoom right in to one, then drag with the right mouse button to tilt the map.</p>
         plugins:
           datasette-maplibre:
             view: points
             color_column: kind
-            style: bright
       countries:
         description_html: |-
           <p>The <code>boundary</code> column is GeoJSON. Every cell is a map, and the map above the table shows
@@ -132,7 +129,6 @@ databases:
         source_url: https://www.naturalearthdata.com/
         plugins:
           datasette-maplibre:
-            style: positron
             color_column: continent
       rivers:
         description_html: |-
@@ -141,7 +137,6 @@ databases:
         source_url: https://www.naturalearthdata.com/
         plugins:
           datasette-maplibre:
-            style: positron
             color_column: kind
       cities:
         source: Natural Earth
@@ -156,5 +151,4 @@ databases:
         plugins:
           datasette-maplibre:
             view: points
-            style: positron
             color_column: continent
