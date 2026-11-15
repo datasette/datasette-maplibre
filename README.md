@@ -2,11 +2,15 @@
 
 Datasette plugin that maps latitude/longitude and GeoJSON data using [MapLibre GL](https://maplibre.org/) and [OpenFreeMap](https://openfreemap.org/).
 
-It combines the features of [datasette-cluster-map](https://github.com/simonw/datasette-cluster-map) and [datasette-leaflet-geojson](https://github.com/simonw/datasette-leaflet-geojson) on a vector map, and adds some of its own. No API key is needed.
+It combines the features of [datasette-cluster-map](https://github.com/simonw/datasette-cluster-map) and [datasette-leaflet-geojson](https://github.com/simonw/datasette-leaflet-geojson) on a vector map, and adds some of its own.
 
 ## Demo
 
-The `demo/` directory has a demo instance with a guided tour of every feature on its home page: 19 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
+**[Try the demo instance](https://lite.datasette.io/?install=datasette-maplibre&url=https://gist.githubusercontent.com/simonw/39fa5d399465766039549912e2b3d291/raw/f6dfba99a75cbb8b5d9386223220eb52272767ee/demo.db&metadata=https://gist.githubusercontent.com/simonw/39fa5d399465766039549912e2b3d291/raw/f6dfba99a75cbb8b5d9386223220eb52272767ee/metadata.yml)**, which runs in your browser using [Datasette Lite](https://lite.datasette.io/).
+
+Its home page is a guided tour of every feature: 19 links, each opening a map set up to show one thing. It uses 35,000 power plants, a month of earthquakes, country boundaries, rivers, capital cities and landmarks with photographs.
+
+To run the same demo locally, use the `demo/` directory:
 
     uv run python demo/build.py
     uv run datasette demo/demo.db -m demo/metadata.yml -c demo/datasette.yml --setting max_returned_rows 5000
