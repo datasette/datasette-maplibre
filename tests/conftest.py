@@ -3,7 +3,7 @@ from datasette_test import wait_until_responds
 import json
 import pytest
 import sqlite3
-from subprocess import Popen, PIPE
+from subprocess import Popen, DEVNULL
 import sys
 
 # An empty style, so that the tests never need to fetch tiles
@@ -104,6 +104,15 @@ def ds_db_path(tmp_path_factory):
                     ),
                 ),
             )
+        # Two power plants on one site, and a third somewhere else
+        db.execute(
+            "create table stacked (id integer primary key, name text, latitude float, longitude float)"
+        )
+        db.execute(
+            "insert into stacked (name, latitude, longitude) values "
+            "('Emden Biomasse', 53.3422, 7.2062), ('Emden Natural Gas', 53.3422, 7.2062), "
+            "('Bremen', 53.0793, 8.8017)"
+        )
         db.execute(
             "create table mixed (id integer primary key, name text, latitude float, "
             "longitude float, boundary text, popup text)"
@@ -167,7 +176,8 @@ def ds_server(ds_db_path, tmp_path_factory):
             str(config_path),
             str(ds_db_path),
         ],
-        stdout=PIPE,
+        # Not a pipe: nothing reads it, so the server would block once it filled
+        stdout=DEVNULL,
     )
     url = "http://localhost:{}".format(port)
     try:

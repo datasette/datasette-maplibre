@@ -78,6 +78,12 @@ const CSS = `
 .dmap-popup p { margin: 0 0 0.4em 0; }
 .dmap-popup a.dmap-popup-link { text-decoration: none; color: inherit; display: block; }
 .dmap-popup .dmap-popup-row { display: block; margin-top: 0.5em; }
+.dmap-popup-pager { display: flex; align-items: center; gap: 0.4em; font-size: 0.8rem;
+  color: #222; margin: 0 1.2em 0.5em 0; padding-bottom: 0.4em; border-bottom: 1px solid #ddd; }
+.dmap-popup-pager span { flex: 1; text-align: center; font-weight: bold; }
+.dmap-popup-pager button { font: inherit; line-height: 1; padding: 0.25em 0.6em;
+  border: 1px solid #bbb; border-radius: 4px; background: #fff; color: #222; cursor: pointer; }
+.dmap-popup-pager button:hover { background: #f0f0f0; }
 tr.dmap-row-active > td { background-color: #fff3c4 !important; }
 .dmap-cell { position: relative; width: 100%; min-width: 360px; height: 280px;
   background: #f1f3f5; overflow: hidden; }
@@ -276,6 +282,28 @@ function mapBounds(bounds) {
   ];
 }
 
+function clusterPaint(count) {
+  // A disc for a number of rows, darker and larger the more there are
+  return {
+    "circle-color": [
+      "step",
+      ["get", count],
+      "#60a5fa",
+      10,
+      "#3b82f6",
+      100,
+      "#1d4ed8",
+      1000,
+      "#1e3a8a",
+    ],
+    "circle-opacity": 0.9,
+    // Just big enough for the label: 9, 99, 999 and 9.9k
+    "circle-radius": ["step", ["get", count], 10, 10, 12, 100, 15, 1000, 18],
+    "circle-stroke-color": "#fff",
+    "circle-stroke-width": 1.5,
+  };
+}
+
 function featureCollection(features) {
   return { type: "FeatureCollection", features };
 }
@@ -384,6 +412,12 @@ const NOT_POINTS = [
   ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]],
 ];
 const POINTS = ["in", ["geometry-type"], ["literal", ["Point", "MultiPoint"]]];
+// The first of several rows at the same point, when it is not inside a cluster
+const IS_STACK = [
+  "all",
+  ["!", ["has", "point_count"]],
+  [">", ["coalesce", ["get", "n"], 0], 1],
+];
 
 function addShapeLayers(map, source, prefix, color) {
   map.addLayer({
@@ -698,6 +732,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
   const shapes = [];
   // A point for every shape, shown while the shape is too small to see
   const centers = [];
+  // Rows that share a point: "lng,lat" -> { rows: [row indexes], leader: feature }
+  const stacks = new Map();
   let locatedRows = 0;
   let bounds = null;
   let library = null;
@@ -845,6 +881,9 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     wrapper.dataset.rows = rows.length;
     wrapper.dataset.points = points.length;
     wrapper.dataset.shapes = shapes.length;
+    wrapper.dataset.stacks = Array.from(stacks.values()).filter(
+      (stack) => stack.rows.length > 1
+    ).length;
     wrapper.dataset.moved = String(Boolean(map) && movedSinceFit());
     wrapper.dataset.complete = String(complete);
     wrapper.dataset.view = view;
@@ -989,6 +1028,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       cluster: view === "clusters",
       clusterRadius: config.clusterRadius,
       clusterMaxZoom: 14,
+      // A cluster where this equals point_count is a single stack of rows
+      clusterProperties: { stack: ["max", ["coalesce", ["get", "n"], 0]] },
     });
     map.addSource(HIGHLIGHT_SOURCE, {
       type: "geojson",
@@ -1020,6 +1061,42 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
       "circle-stroke-color": "#fff",
       "circle-stroke-width": 1.5,
     };
+    // Rows at exactly the same point are drawn like a cluster, with a count,
+    // however far the map is zoomed in
+    const font = fontForLabels();
+    const addStackLayers = (minzoom, opacity) => {
+      const extra = minzoom ? { minzoom } : {};
+      map.addLayer({
+        id: "dmap-stack",
+        type: "circle",
+        source: POINTS_SOURCE,
+        filter: IS_STACK,
+        ...extra,
+        paint: {
+          ...clusterPaint("n"),
+          "circle-opacity": opacity,
+          "circle-stroke-opacity": opacity,
+        },
+      });
+      layerIds.push("dmap-stack");
+      if (font) {
+        map.addLayer({
+          id: "dmap-stack-count",
+          type: "symbol",
+          source: POINTS_SOURCE,
+          filter: IS_STACK,
+          ...extra,
+          layout: {
+            "text-field": ["to-string", ["get", "n"]],
+            "text-font": font,
+            "text-size": 11,
+            "text-allow-overlap": true,
+          },
+          paint: { "text-color": "#fff", "text-opacity": opacity },
+        });
+        layerIds.push("dmap-stack-count");
+      }
+    };
     if (view === "heatmap") {
       map.addLayer({
         id: "dmap-heat",
@@ -1042,33 +1119,16 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         paint: { ...pointPaint, "circle-opacity": fade, "circle-stroke-opacity": fade },
       });
       layerIds.push("dmap-heat", "dmap-point");
+      addStackLayers(11, fade);
     } else {
       map.addLayer({
         id: "dmap-cluster",
         type: "circle",
         source: POINTS_SOURCE,
         filter: ["has", "point_count"],
-        paint: {
-          "circle-color": [
-            "step",
-            ["get", "point_count"],
-            "#60a5fa",
-            10,
-            "#3b82f6",
-            100,
-            "#1d4ed8",
-            1000,
-            "#1e3a8a",
-          ],
-          "circle-opacity": 0.9,
-          // Just big enough for the label: 9, 99, 999 and 9.9k
-          "circle-radius": ["step", ["get", "point_count"], 10, 10, 12, 100, 15, 1000, 18],
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1.5,
-        },
+        paint: clusterPaint("point_count"),
       });
       layerIds.push("dmap-cluster");
-      const font = fontForLabels();
       if (font) {
         map.addLayer({
           id: "dmap-cluster-count",
@@ -1093,6 +1153,7 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         paint: pointPaint,
       });
       layerIds.push("dmap-point");
+      addStackLayers(0, 0.9);
     }
     // The table row being hovered over, drawn on top of everything else
     map.addLayer({
@@ -1163,6 +1224,19 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     let located = false;
     const add = (geometry) => {
       const feature = { type: "Feature", properties, geometry };
+      if (geometry.type === "Point") {
+        // The first point of a stack carries n, the number of rows in it
+        feature.properties = { ...properties };
+        const key = geometry.coordinates.slice(0, 2).join(",");
+        const stack = stacks.get(key) || { rows: [], leader: feature };
+        stacks.set(key, stack);
+        if (!stack.rows.includes(index)) {
+          stack.rows.push(index);
+        }
+        if (stack.rows.length > 1) {
+          stack.leader.properties.n = stack.rows.length;
+        }
+      }
       (geometry.type === "Point" ? points : shapes).push(feature);
       bounds = extendBounds(bounds, geometry);
       if (geometry.type !== "Point") {
@@ -1229,30 +1303,8 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
     return layers.length ? map.queryRenderedFeatures(point, { layers }) : [];
   }
 
-  function onClick(ev) {
-    const features = featuresAt(ev.point);
-    if (!features.length) {
-      return;
-    }
-    // Prefer points and clusters over the shapes underneath them
-    const feature =
-      features.find((f) => f.layer.type === "circle" || f.layer.type === "symbol") ||
-      features[0];
-    if (feature.properties.cluster) {
-      map
-        .getSource(POINTS_SOURCE)
-        .getClusterExpansionZoom(feature.properties.cluster_id)
-        .then((zoom) => {
-          map.easeTo({ center: feature.geometry.coordinates, zoom });
-        });
-      return;
-    }
-    const index = feature.properties._row;
-    const row = rows[index];
-    if (!row) {
-      return;
-    }
-    const content = popupContent(row);
+  function rowContent(index) {
+    const content = popupContent(rows[index]);
     if (domRows[index] && pageType !== "row") {
       content.appendChild(
         h(
@@ -1269,14 +1321,89 @@ function overviewMap({ latitudeColumn, longitudeColumn, pageType }) {
         )
       );
     }
-    markTableRow(index);
-    new library.Popup({ maxWidth: "320px" })
-      .setLngLat(
+    return content;
+  }
+
+  function showPopup(indexes, lngLat) {
+    // One row, or several at the same location to step through
+    const root = h("div");
+    const label = h("span");
+    let position = 0;
+    const show = (to) => {
+      position = (to + indexes.length) % indexes.length;
+      const index = indexes[position];
+      label.textContent = `${position + 1} of ${indexes.length} rows at this location`;
+      if (root.lastChild && root.lastChild.classList.contains("dmap-popup")) {
+        root.lastChild.remove();
+      }
+      root.appendChild(rowContent(index));
+      markTableRow(index);
+      wrapper.dataset.popupRow = index;
+    };
+    if (indexes.length > 1) {
+      const button = (text, name, step) =>
+        h(
+          "button",
+          { type: "button", "aria-label": name, onclick: () => show(position + step) },
+          text
+        );
+      root.appendChild(
+        h("div", { class: "dmap-popup-pager" }, [
+          button("‹", "Previous row", -1),
+          label,
+          button("›", "Next row", 1),
+        ])
+      );
+    }
+    show(0);
+    new library.Popup({ maxWidth: "320px" }).setLngLat(lngLat).setDOMContent(root).addTo(map);
+  }
+
+  function stackFor(index) {
+    // Every row with a point exactly where this row has one
+    const feature = points.find((f) => f.properties._row === index);
+    const stack = feature && stacks.get(feature.geometry.coordinates.slice(0, 2).join(","));
+    return stack ? stack.rows : [index];
+  }
+
+  function onClick(ev) {
+    const features = featuresAt(ev.point);
+    if (!features.length) {
+      return;
+    }
+    // Prefer points and clusters over the shapes underneath them
+    const feature =
+      features.find((f) => f.layer.type === "circle" || f.layer.type === "symbol") ||
+      features[0];
+    const { properties } = feature;
+    if (properties.cluster) {
+      const source = map.getSource(POINTS_SOURCE);
+      if (properties.stack === properties.point_count) {
+        // Zooming in would never separate these rows
+        source.getClusterLeaves(properties.cluster_id, 1, 0).then(([leaf]) => {
+          showPopup(stackFor(leaf.properties._row), leaf.geometry.coordinates);
+        });
+        return;
+      }
+      source.getClusterExpansionZoom(properties.cluster_id).then((zoom) => {
+        map.easeTo({ center: feature.geometry.coordinates, zoom });
+      });
+      return;
+    }
+    const index = properties._row;
+    if (!rows[index]) {
+      return;
+    }
+    if (feature.geometry.type === "Point" && feature.source === POINTS_SOURCE) {
+      const stack = stackFor(index);
+      const point = points.find((f) => f.properties._row === stack[0]);
+      showPopup(stack, point.geometry.coordinates);
+    } else {
+      showPopup(
+        [index],
         feature.geometry.type === "Point" ? feature.geometry.coordinates : ev.lngLat
-      )
-      .setDOMContent(content)
-      .addTo(map);
-    wrapper.dataset.popupRow = index;
+      );
+    }
   }
 
   function filterToArea() {

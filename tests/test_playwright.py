@@ -250,6 +250,71 @@ def test_popup_escapes_html(ds_server, page, errors):
     expect(popup.locator("b")).to_have_count(0)
 
 
+@pytest.mark.parametrize(
+    "view,zoom",
+    (
+        ("clusters", None),
+        ("points", None),
+        ("clusters", 16),
+        ("points", 16),
+        # The heatmap only has points to click on once zoomed in
+        ("heatmap", 16),
+    ),
+)
+def test_rows_at_the_same_location_share_a_popup(ds_server, page, errors, view, zoom):
+    page.goto(ds_server + "/data/stacked#view=" + view)
+    overview = ready(page)
+    expect(overview).to_have_attribute("data-view", view)
+    expect(overview).to_have_attribute("data-stacks", "1")
+    if zoom:
+        # Zoomed in further than clustering goes
+        page.evaluate(
+            "(zoom) => datasette.maplibre.map.jumpTo({center: [7.2062, 53.3422], zoom})",
+            zoom,
+        )
+    click_feature(page, 7.2062, 53.3422)
+    popup = overview.locator(".dmap-popup")
+    pager = overview.locator(".dmap-popup-pager")
+    expect(pager).to_contain_text("1 of 2 rows at this location")
+    expect(popup).to_contain_text("Emden Biomasse")
+    rows = page.locator("table.rows-and-columns tbody tr")
+    expect(rows.nth(0)).to_have_class(re.compile("dmap-row-active"))
+    pager.get_by_role("button", name="Next row").click()
+    expect(pager).to_contain_text("2 of 2 rows at this location")
+    expect(popup).to_have_count(1)
+    expect(popup).to_contain_text("Emden Natural Gas")
+    expect(popup.get_by_text("Show in table")).to_be_visible()
+    expect(rows.nth(1)).to_have_class(re.compile("dmap-row-active"))
+    expect(rows.nth(0)).not_to_have_class(re.compile("dmap-row-active"))
+    # It wraps around
+    pager.get_by_role("button", name="Next row").click()
+    expect(pager).to_contain_text("1 of 2 rows at this location")
+    pager.get_by_role("button", name="Previous row").click()
+    expect(popup).to_contain_text("Emden Natural Gas")
+
+
+@pytest.mark.parametrize("view", ("clusters", "points"))
+def test_rows_at_the_same_location_are_drawn_with_a_count(ds_server, page, errors, view):
+    page.goto(ds_server + "/data/stacked#view=" + view)
+    ready(page)
+    page.evaluate(
+        "() => datasette.maplibre.map.jumpTo({center: [7.2062, 53.3422], zoom: 16})"
+    )
+    page.wait_for_function("() => datasette.maplibre.map.loaded()")
+    counts = page.evaluate(
+        "() => datasette.maplibre.map.queryRenderedFeatures({layers: ['dmap-stack']}).map(f => f.properties.n)"
+    )
+    assert counts == [2]
+
+
+def test_a_row_on_its_own_has_no_pager(ds_server, page, errors):
+    page.goto(ds_server + "/data/stacked#view=points")
+    overview = ready(page)
+    click_feature(page, 8.8017, 53.0793)
+    expect(overview.locator(".dmap-popup")).to_contain_text("Bremen")
+    expect(overview.locator(".dmap-popup-pager")).to_have_count(0)
+
+
 def test_hovering_table_row_highlights_it_on_the_map(ds_server, page, errors):
     page.goto(ds_server + "/data/two_points")
     overview = ready(page)

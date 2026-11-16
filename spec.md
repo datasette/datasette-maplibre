@@ -51,6 +51,7 @@ vector maps with [OpenFreeMap](https://openfreemap.org/) styles. No API keys.
 - [x] Heatmap intensity is normalised by the density of the points
 - [x] The map never zooms out far enough to repeat the world
 - [x] Popup images have a fixed height, so popups are positioned correctly before the image loads
+- [x] Rows at exactly the same point: a numbered disc at any zoom in every view, and one popup that pages through them (a cluster made only of such rows opens the popup instead of zooming)
 - [x] Demo instance in `demo/` with a guided tour of every feature
 - [x] "All N rows are on the map" line when the map has more rows than the page of the table
 - [x] Globe toggle in the toolbar, replacing the 3D button and the globe control on the map
